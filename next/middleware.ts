@@ -1,20 +1,9 @@
-import { auth } from "@/lib/auth";
-import { NextResponse } from "next/server";
+import NextAuth from "next-auth";
+import { authConfig } from "./auth.config";
 
-export default auth((req) => {
-  const { nextUrl } = req;
-  const isLoggedIn = !!req.auth;
-  const path = nextUrl.pathname;
+export const { auth: middleware } = NextAuth(authConfig);
 
-  const isAppRoute = path === "/app" || path.startsWith("/app/");
-
-  if (isAppRoute && !isLoggedIn) {
-    const loginUrl = new URL("/login", nextUrl);
-    loginUrl.searchParams.set("next", path);
-    return NextResponse.redirect(loginUrl);
-  }
-  return NextResponse.next();
-});
+export default middleware;
 
 export const config = {
   matcher: ["/app", "/app/:path*"]
