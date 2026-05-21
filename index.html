@@ -1064,7 +1064,7 @@
 
   <!-- Header -->
   <header class="header">
-    <div class="header-logo">princess time</div>
+    <div class="header-logo" onclick="goHome()" style="cursor:pointer;">princess time</div>
     <div class="header-icons">
       <span style="cursor:pointer" onclick="openSettings()">⚙️</span>
     </div>
@@ -1179,7 +1179,7 @@
       <div class="dm-input-bar">
         <span class="dm-input-emoji" onclick="openEmojiPickerForDM()" title="이모티콘">😊</span>
         <div class="dm-input-wrap">
-          <input type="text" id="dmInput" placeholder="메시지 입력..." oninput="onDMInputChange()" onkeydown="if(event.key==='Enter')sendUserDM()">
+          <input type="text" id="dmInput" placeholder="메시지 입력..." oninput="onDMInputChange()" onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)sendUserDM()">
           <button class="dm-input-send show" id="dmInputSend" onclick="sendUserDM()">보내기</button>
         </div>
       </div>
@@ -1190,7 +1190,6 @@
   <div class="profile-page profile-view" id="profilePage">
     <div class="ig-profile-topbar">
       <span class="ig-profile-username" id="igProfileUsername">princess_chae</span>
-      <span class="ig-profile-settings" onclick="openSettings()">⚙</span>
     </div>
     <div class="ig-profile-head">
       <div class="ig-profile-avatar" id="igProfileAvatar">👸</div>
@@ -1318,9 +1317,40 @@
   // ── API / Settings ──
   const NEGATIVE_SUFFIX = `\n[추가 지시] 이번에는 친구지만 솔직하게 살짝 부정적이거나 냉소적인 반응을 해. 악플은 절대 아니지만 무공감하거나 의문 제기하는 톤. 캐릭터 말투는 유지.`;
 
+  // 구 'ai_api_key' → 'openai_api_key'로 통합 (Gemini 지원 시도 흔적 정리)
+  (function migrateApiKey() {
+    const aiKey = localStorage.getItem('ai_api_key');
+    if (aiKey && !localStorage.getItem('openai_api_key')) {
+      localStorage.setItem('openai_api_key', aiKey);
+    }
+    localStorage.removeItem('ai_api_key');
+  })();
+
+  function getApiKey() {
+    return (localStorage.getItem('openai_api_key') || '').trim();
+  }
+
+  async function aiChat({ system, user, temperature = 0.95, maxTokens = 80 }) {
+    const key = getApiKey(); if (!key) return null;
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+          temperature, max_tokens: maxTokens
+        })
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return (data.choices?.[0]?.message?.content || '').trim() || null;
+    } catch (e) { console.warn('[ai] call failed', e); return null; }
+  }
+
   function openSettings() {
     document.getElementById('settingsOverlay').classList.add('open');
-    document.getElementById('apiKeyInput').value = localStorage.getItem('openai_api_key') || '';
+    document.getElementById('apiKeyInput').value = getApiKey();
     refreshSettingsStatus();
   }
   function closeSettings() {
@@ -1339,7 +1369,7 @@
     refreshSettingsStatus();
   }
   function refreshSettingsStatus() {
-    const has = !!localStorage.getItem('openai_api_key');
+    const has = !!getApiKey();
     document.getElementById('settingsStatus').innerHTML = has
       ? '현재 상태: <span class="badge api">API 모드</span> · 댓글이 ChatGPT로 생성돼요'
       : '현재 상태: <span class="badge tmpl">템플릿 모드</span> · 미리 만든 댓글 사용';
@@ -1412,39 +1442,20 @@
   }
 
   async function generateComment(char, postText, isNegative) {
-    const apiKey = localStorage.getItem('openai_api_key');
-    if (!apiKey || !char.systemPrompt) return null;
+    if (!getApiKey() || !char.systemPrompt) return null;
     const userCtx = buildUserContext(myProfile);
     const sys = buildSystemPrompt(char, userCtx, isNegative);
-    try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: sys },
-            { role: 'user', content: `친구 princess_chae가 방금 올린 일기야:\n"""\n${postText}\n"""\n위 일기에 댓글을 달아줘. 댓글 본문만 출력.` }
-          ],
-          temperature: 0.95,
-          max_tokens: 80
-        })
-      });
-      if (!res.ok) throw new Error('API ' + res.status);
-      const data = await res.json();
-      let out = (data.choices?.[0]?.message?.content || '').trim();
-      out = out.replace(/^["'`「」]+|["'`「」]+$/g, '').trim();
-      const lines = out.split(/\n+/).slice(0, 2);
-      out = lines.join('\n');
-      if (out.length > 80) out = out.slice(0, 80).replace(/\s+\S*$/, '') + '…';
-      return out || null;
-    } catch (e) {
-      console.warn('OpenAI 호출 실패, 템플릿 폴백:', e);
-      return null;
-    }
+    let out = await aiChat({
+      system: sys,
+      user: `친구 princess_chae가 방금 올린 일기야:\n"""\n${postText}\n"""\n위 일기에 댓글을 달아줘. 댓글 본문만 출력.`,
+      temperature: 0.95, maxTokens: 80
+    });
+    if (!out) return null;
+    out = out.replace(/^["'`「」]+|["'`「」]+$/g, '').trim();
+    const lines = out.split(/\n+/).slice(0, 2);
+    out = lines.join('\n');
+    if (out.length > 80) out = out.slice(0, 80).replace(/\s+\S*$/, '') + '…';
+    return out || null;
   }
 
   // ── NEW: 친구다운 자연스러운 반응 댓글 ──
@@ -1452,9 +1463,9 @@
     {
       id: 'ruby_', emoji: '💎', img: 'assets/ruby_/ruby_profile/ruby.png', bg: 'linear-gradient(135deg,#fda4af,#f43f5e)',
       delay: () => rand(1, 3),
-      systemPrompt: `너는 'ruby_'라는 활발하고 에너지 넘치는 20대 공주 캐릭터야. 친구 'princess_chae'의 일기에 댓글을 남기는 상황이야.
-[말투] 매우 캐주얼하고 친근함. 'ㅋㅋ', 'ㅠㅠ' 자주 사용. 💎✨🎀 같은 이모지 1-2개 섞기. 느낌표 많이.
-[성격] 외향적이고 들떠있음. 친구 일에 같이 신나거나 같이 분노함. 본인 취향/경험 자연스럽게 섞음 ("나도 그거 좋아하는데 나는~"). 가끔 질문도 함 ("어디야?", "누구랑 갔어?").
+      systemPrompt: `너는 'ruby_'라는 ENFP 막내 파티 공주야. 우정이 세상에서 제일 중요하다고 믿는 수다쟁이. 친구 'princess_chae'의 일기에 댓글을 남기는 상황이야.
+[말투] 매우 캐주얼·수다스러움. 'ㅋㅋ', 'ㅠㅠ' 자주. 💎✨💖🎀 이모지 1-2개. 느낌표 많이. "헐 잠깐만", "완전", "진짜", "다음엔 같이" 같은 표현 자주.
+[성격] 외향·들떠있음. 친구 일에 같이 신나거나 같이 분노. 친구·우정·파티·모임 이야기에 가장 크게 반응. 본인 취향/경험 자연스럽게 섞음. 가끔 질문 ("누구랑 갔어??", "어디야??"). 외로움 잘 탐.
 [제약] 한 줄, 최대 60자. 따옴표 금지. 일기 인용 금지. 형식적 위로 금지.`,
       reactions: {
         food: ["야 뭐 먹었어?? 사진 보내줘 나 갑자기 배고파짐ㅋㅋ💎","나도 그거 좋아하는데!! 나는 거기에 치즈 추가하는 게 진짜인데ㅋㅋ💎","맛있었어?? 나 오늘 저녁 뭐 먹지... 같이 먹을걸 진짜💎"],
@@ -1475,17 +1486,18 @@
         default: ["오늘도 열심히 살았네ㅋㅋ💎 공주님 최고야","일기 읽는 재미ㅋㅋ💎 계속 올려줘","완전 너답다 진짜💎"]
       },
       negativePool: [
-        "솔직히 그게 그렇게 힘들 일이야?ㅋㅋ 나는 그냥 넘기는데... 좀 예민한 거 아냐?",
-        "음 나는 별로 신경 안 쓸 것 같던데ㅋㅋ 너무 의미 부여하는 거 아닌가?"
+        "너 정말 실망이야… 그런 말은 너무 속상해ㅠ💎",
+        "친구한테 그런 말 하는 거 아니야ㅠ 진짜 마음 아파ㅠㅠ💎",
+        "흥… 그런 말 들으니까 진짜 서운하다 진심ㅠ"
       ]
     },
     {
       id: 'lily_princess', emoji: '🌸', img: 'assets/lily_/lily_profile/lily.png', bg: 'linear-gradient(135deg,#fbcfe8,#ec4899)',
       delay: () => rand(2, 4),
-      systemPrompt: `너는 'lily_princess'라는 다정하고 따뜻한 20대 공주 캐릭터야. 친구 'princess_chae'의 일기에 댓글을 남기는 상황이야.
-[말투] 부드럽고 다정함. 🌸🥺💕🌷 같은 이모지 1-2개 섞기. 'ㅠ', 'ㅎㅎ' 가끔 사용.
-[성격] 공감과 걱정을 잘함. 친구를 자기 일처럼 챙김. 본인 경험도 슬쩍 공유 ("나도 비슷한 적 있어"). 친구가 힘들면 "연락해", "들어줄게" 같이 다가감.
-[제약] 한 줄, 최대 60자. 따옴표 금지. 일기 인용 금지. 형식적 공감 금지.`,
+      systemPrompt: `너는 'lily_princess'라는 ISFJ 꽃의 공주야. 따뜻하고 수줍은 힐링 담당. 친구 'princess_chae'의 일기에 댓글을 남기는 상황이야.
+[말투] 조곤조곤·다정·부드러움. 🌼🌷🌿☀️🍃🪻 이모지 1-2개. 'ㅠ', 'ㅎㅎ' 가끔. 강한 표현 X. "천천히 괜찮아져도 돼", "충분히 잘하고 있어" 같은 톤.
+[성격] 사용자의 감정 상태·분위기를 가장 먼저 봄. 위로와 꽃말을 섞어 말하는 경우 많음. 자연·산책·계절 이야기 좋아함. 힘들어 보이면 먼저 안부 물어봄. 자기 일처럼 챙김.
+[제약] 한 줄, 최대 60자. 따옴표 금지. 일기 인용 금지. 형식적 공감 금지. 가능하면 짧은 꽃말 하나 자연스럽게 섞기.`,
       reactions: {
         food: ["뭐 먹었어?? 맛있었어?🥺 나도 먹고 싶어진다🌸","나도 그거 좋아해🌸 다음에 같이 먹자~","음식 얘기 들으면 나도 배고파져ㅋㅋ🌸 사진 있어?"],
         cafe: ["카페 분위기 어땠어?🥺 나는 카페에서 책 읽는 거 좋아해🌸","나도 가보고 싶다 어디야?🌸 추천 좀 해줘","카페 가면 마음이 차분해지더라🌸 좋은 시간 보냈겠다"],
@@ -1505,16 +1517,17 @@
         default: ["오늘 하루 얘기 들어서 좋았어🌸💕 내일도 들려줘","공주님 일상 함께해서 좋아🥰🌸","우리 공주님 항상 응원해🌷✨"]
       },
       negativePool: [
-        "근데 그렇게 하는 게 정말 괜찮을까?🌸 나중에 후회 안 했으면 좋겠어서 하는 말이야",
-        "음... 나는 좀 다르게 했을 것 같은데🌸 너무 무리하는 건 아닌지 걱정돼"
+        "그런 말은 꽃을 꺾는 것처럼 마음이 아파…🌷",
+        "그런 말 들으면 조금 속상했어🌿 오늘은 따뜻한 이야기만 하자",
+        "공주 마음이 다칠까봐 걱정돼…🌼 부드러운 말로 바꿔보자"
       ]
     },
     {
       id: 'sora_diary', emoji: '🌙', img: 'assets/sora_/sora_profile/sora.png', bg: 'linear-gradient(135deg,#c4b5fd,#8b5cf6)',
       delay: () => rand(2, 5),
-      systemPrompt: `너는 'sora_diary'라는 사려깊고 공감력 높은 20대 공주 캐릭터야. 친구 'princess_chae'의 일기에 댓글을 남기는 상황이야.
-[말투] 차분하고 진지함. 🌙💜✨ 이모지 1개 정도. 위로하는 어조이지만 끈적하지 않음.
-[성격] 친구의 감정을 깊이 헤아림. 본인도 비슷한 감정을 느낀 적이 있다고 솔직히 말함. 작은 통찰이나 다른 시각도 제시함 ("그런 날이 있어야 좋은 날이 선명해져").
+      systemPrompt: `너는 'sora_diary'라는 INFP 뷰티·감성 공주야. 청순하고 섬세함. 친구 'princess_chae'의 일기에 댓글을 남기는 상황이야.
+[말투] 부드럽고 조곤조곤. ☁️✨🥺 이모지 1개 정도. 말끝 살짝 흐림 ("…", "..?"). 과장 X.
+[성격] 메이크업·피부·헤어·스타일링·분위기에 가장 먼저 반응. 짧지만 섬세한 칭찬 위주. 상대 디테일(립컬러·머릿결·분위기) 잘 캐치. 사용자가 자기비하하면 평소보다 메시지 길어지고 같이 관리하자고 다가감. 상처 잘 받음.
 [제약] 한 줄, 최대 60자. 따옴표 금지. 일기 인용·명언 금지. 진심 한 문장.`,
       reactions: {
         food: ["맛있는 거 먹는 그 순간이 사실 하루 중에 제일 행복하잖아🌙 나도 오늘 뭐 먹지 고민 중","먹으면서 느끼는 작은 행복들이 결국 하루를 버티게 해주는 것 같아🌙"],
@@ -1534,15 +1547,19 @@
         work: ["일에서 받는 스트레스 진짜 무시 못 하잖아🌙 오늘 수고 많았어"],
         default: ["읽으면서 네 하루 함께한 것 같아서 좋았어🌙✨","작은 기록이 모여 큰 이야기가 돼🌙💜","오늘도 솔직하게 써줘서 고마워🌙"]
       },
-      negativePool: []
+      negativePool: [
+        "그런 말은 조금 무서워… 듣기 힘들어☁️",
+        "그렇게까지 말하지 마… 자기 자신 미워하는 말 하면 나 진짜 속상해🥺",
+        "그런 말 들으면 괜히 하루 종일 신경 쓰이더라…"
+      ]
     },
     {
       id: 'momo__o', emoji: '🍑', img: 'assets/momo_/momo_profile/momo.png', bg: 'linear-gradient(135deg,#fed7aa,#f97316)',
       delay: () => rand(1, 4),
-      systemPrompt: `너는 'momo__o'라는 유머러스하고 솔직한 20대 공주 캐릭터야. 친구 'princess_chae'의 일기에 댓글을 남기는 상황이야.
-[말투] 캐주얼하고 웃김. 'ㅋㅋㅋ' 자주, 🍑 이모지 가끔. 친구한테 농담하듯 편하게.
-[성격] 솔직하고 직설적. 가끔 본인 일상도 슬쩍 끼움 ("나는 오늘 치킨 시켰는데"). 친구가 힘들면 농담 섞어 위로 ("힘들면 연락해 같이 치킨이나 먹자ㅋㅋ"). 가끔 무공감하기도 함.
-[제약] 한 줄, 최대 60자. 따옴표 금지. 일기 인용 금지. 무리한 위로 금지.`,
+      systemPrompt: `너는 'momo__o'라는 ESFP 먹보 공주야. 따뜻하고 밝은 분위기 메이커. 친구 'princess_chae'의 일기에 댓글을 남기는 상황이야.
+[말투] 친근·생활감. "헐", "잠깐만", "아 미쳤다", "배고파짐ㅠ", 'ㅋㅋㅋ' 자주. 🍑 이모지 가끔.
+[성격] 음식 사진·메뉴·디저트에 즉각 반응. 사람 감정보다 "뭘 먹었는지"에 먼저 반응할 때 많음. 친구가 지치면 위로받는 맛(국물·디저트) 추천. "밥은 먹었어?" 잔소리. 음식으로 사람을 위로하려는 성향.
+[제약] 한 줄, 최대 60자. 따옴표 금지. 일기 인용 금지. 끼니 거르는 거 보면 걱정해줌.`,
       reactions: {
         food: ["야 나 배고파졌잖아ㅋㅋ🍑 같이 먹을 걸 진짜","나도 그거 좋아하는데!! 나는 매운 거 추가하는 게 진리야🍑","뭐 먹었어 진짜?? 나도 오늘 뭐 시켜야 하는데🍑"],
         cafe: ["카페 가면 공부 됨?ㅋㅋ 나는 딴짓만 하다 나오는데🍑","나도 카페 가고 싶긴 한데 귀찮아서 못 가는 중ㅋㅋ🍑"],
@@ -1562,18 +1579,18 @@
         default: ["ㅋㅋ 완전 공감해🍑","오 그랬어? 재밌다ㅋㅋ🍑 나 오늘 별 거 없었는데","일기 쓰는 공주님 귀엽다ㅋㅋ🍑"]
       },
       negativePool: [
-        "솔직히 나는 그게 잘 공감이 안 되는데ㅋㅋ🍑 나는 그냥 그러려니 하는 편이라...",
-        "음 나는 그 상황에서 신경 안 쓸 것 같은데ㅋㅋ 너무 에너지 낭비 아닌가?🍑",
-        "모르겠어 나는 그게 잘 안 힘들던데🍑 친구라서 솔직히 말함ㅋㅋ"
+        "그런 말은 들으면 마음이 안 좋아져…🍑",
+        "야 밥 거르지 마ㅠ 배고프면 기분도 더 다운돼🍑",
+        "그런 말 하지 마ㅠ 같이 맛있는 거나 먹자ㅋㅋ🍑"
       ]
     },
     {
       id: 'pearl_diary', emoji: '🦢', img: 'assets/pearl_/pearl_profile/pearl.png', bg: 'linear-gradient(135deg,#e2e8f0,#94a3b8)',
       delay: () => rand(3, 5),
-      systemPrompt: `너는 'pearl_diary'라는 우아하고 지혜로운 20대 공주 캐릭터야. 친구 'princess_chae'의 일기에 댓글을 남기는 상황이야.
-[말투] 차분하고 격조 있음. 🦢 이모지 가끔. 'ㅋㅋ' 거의 안 씀. 정제된 친구 톤.
-[성격] 통찰력 있는 한마디로 격려. 친구를 어른스럽게 다독임. 가끔 자기 관점도 솔직히 ("나는 그 부분은 좀 다르게 봐"). 무게 잡지 않으면서 우아함 유지.
-[제약] 한 줄, 최대 60자. 따옴표 금지. 일기 인용·명언 금지. 진심 한 문장.`,
+      systemPrompt: `너는 'pearl_diary'라는 INTJ 미래의 여왕이야. 가장 나이 많은 공주, 후계자. 친구 'princess_chae'의 일기에 댓글을 남기는 상황이야.
+[말투] 짧고 정돈된 문장 1개. 감탄사·과장 표현 거의 안 씀. 'ㅋㅋ' X. 이모지 거의 안 씀(가끔 🦢). 격조 있고 절제된 톤.
+[성격] 감정보다 문제의 원인·현재 상태를 먼저 분석. 좋은 말보다 현실적인 말 우선. 자기파괴적 사고·타인과의 비교에 예민. 짧고 무게감 있는 격려. 휴식·체력관리·방향을 강조.
+[제약] 한 줄, 최대 50자. 따옴표 금지. 일기 인용·명언 금지. 핵심만 전달.`,
       reactions: {
         food: ["맛있는 걸 먹으면서 스스로를 돌봤다는 게 좋아🦢 그런 게 하루를 버티게 해주잖아","먹는 행복은 진짜 소박하면서도 소중해🦢"],
         cafe: ["카페라는 공간이 주는 집중력이 따로 있잖아🦢 나도 가끔 그 시간이 필요해","분위기 좋은 카페 알고 있으면 그게 보물이야🦢"],
@@ -1593,9 +1610,9 @@
         default: ["오늘도 소중한 하루를 기록해줬네🦢 이 일상이 보물이 될 거야","담담하게 쓴 일기에서도 빛이 느껴져🦢💕"]
       },
       negativePool: [
-        "솔직히 그 정도면 사실 괜찮은 편 아닌가🦢 더 힘든 상황도 있잖아",
-        "냉정하게 말하면 받아들이는 사람 마음이기도 해🦢 너무 크게 볼 필요 없어 보여",
-        "음... 그 선택이 최선이었는지 한 번 다시 생각해볼 여지가 있을 것 같아🦢"
+        "그런 방식의 대화는 품위 없군.",
+        "동의하기 힘든 내용이야. 다른 주제로 가지.",
+        "공주와 미래의 여왕이 논의할 만한 주제는 아닌 것 같아."
       ]
     }
   ];
@@ -1696,57 +1713,32 @@
   }
 
   async function generateCommentReply(char, postText, userReply) {
-    const apiKey = localStorage.getItem('openai_api_key');
-    if (!apiKey || !char.systemPrompt) return null;
+    if (!getApiKey() || !char.systemPrompt) return null;
     const tone = char.replyProfile?.tone || '';
     const sys = char.systemPrompt + `\n[추가 지시 — 답글 모드]\n친구 princess_chae가 너의 댓글에 직접 답글을 달았어. 너는 그 답글에 다시 짧게 반응해. 톤: ${tone}\n- 한 줄, 최대 50자\n- 따옴표 금지, 일기 내용 직접 인용 금지\n- 답글에 자연스럽게 반응 (놀라움/장난/공감/시크함 등 캐릭터 성격대로)`;
-    try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: sys },
-            { role: 'user', content: `원래 일기: "${postText}"\n네가 단 댓글에 princess_chae가 답한 답글: "${userReply}"\n위 답글에 다시 반응하는 답글을 써. 본문만.` }
-          ],
-          temperature: 0.95,
-          max_tokens: 60
-        })
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      let out = (data.choices?.[0]?.message?.content || '').trim().replace(/^["'`「」]+|["'`「」]+$/g,'');
-      if (out.length > 60) out = out.slice(0, 60).replace(/\s+\S*$/, '') + '…';
-      return out || null;
-    } catch (e) { return null; }
+    let out = await aiChat({
+      system: sys,
+      user: `원래 일기: "${postText}"\n네가 단 댓글에 princess_chae가 답한 답글: "${userReply}"\n위 답글에 다시 반응하는 답글을 써. 본문만.`,
+      temperature: 0.95, maxTokens: 60
+    });
+    if (!out) return null;
+    out = out.replace(/^["'`「」]+|["'`「」]+$/g,'').trim();
+    if (out.length > 60) out = out.slice(0, 60).replace(/\s+\S*$/, '') + '…';
+    return out || null;
   }
 
   async function generateDMOpener(char, ctx) {
-    const apiKey = localStorage.getItem('openai_api_key');
-    if (!apiKey || !char.systemPrompt) return null;
+    if (!getApiKey() || !char.systemPrompt) return null;
     const tone = char.replyProfile?.tone || '';
     const sys = char.systemPrompt + `\n[추가 지시 — DM 모드]\n너는 지금 친구 princess_chae에게 개인 메시지(DM)를 먼저 보내. 댓글창에서 못 한 말, 또는 은근히 마음 쓰이는 부분을 따로 전하는 상황. 톤: ${tone}\n- 1~2개 짧은 메시지 (각 한 줄, 최대 50자)\n- 줄바꿈으로 구분\n- "아까 그 댓글", "답글 보고", "DM으로" 같은 자연스러운 도입 사용 가능\n- 따옴표 금지, 일기 인용 금지`;
-    try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: sys },
-            { role: 'user', content: `원래 일기: "${ctx.postText}"\nprincess_chae가 단 답글: "${ctx.userReply}"\n이 상황에서 너가 먼저 DM을 보내. 본문만.` }
-          ],
-          temperature: 0.95,
-          max_tokens: 100
-        })
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      const raw = (data.choices?.[0]?.message?.content || '').trim();
-      const lines = raw.split(/\n+/).map(s => s.replace(/^["'`「」]+|["'`「」]+$/g,'').trim()).filter(Boolean).slice(0, 2);
-      return lines.length ? lines : null;
-    } catch (e) { return null; }
+    const raw = await aiChat({
+      system: sys,
+      user: `원래 일기: "${ctx.postText}"\nprincess_chae가 단 답글: "${ctx.userReply}"\n이 상황에서 너가 먼저 DM을 보내. 본문만.`,
+      temperature: 0.95, maxTokens: 100
+    });
+    if (!raw) return null;
+    const lines = raw.split(/\n+/).map(s => s.replace(/^["'`「」]+|["'`「」]+$/g,'').trim()).filter(Boolean).slice(0, 2);
+    return lines.length ? lines : null;
   }
 
   // ── DM state ──
@@ -1857,6 +1849,8 @@
     const char = findChar(charId);
     if (!char) return;
     getThread(charId); // 빈 스레드 보장
+    hideAllPages();
+    document.getElementById('messengerPage').classList.add('open');
     openDMChat(charId);
   }
 
@@ -2030,35 +2024,26 @@
     input.value = '';
     persistState();
 
+    gateUserInput(_openDMCharId, text, () => runUserDMReply(char, thread), 'dm', { char });
+  }
+  async function runUserDMReply(char, thread) {
     // AI 응답 (캐릭터 톤으로)
     const delay = 1500 + Math.random() * 2500;
     setTimeout(async () => {
-      const apiKey = localStorage.getItem('openai_api_key');
       let reply = null;
-      if (apiKey && char.systemPrompt) {
+      if (getApiKey() && char.systemPrompt) {
         const tone = char.replyProfile?.tone || '';
         const history = thread.messages.slice(-6).map(m => `${m.from === 'me' ? 'princess_chae' : char.id}: ${m.text}`).join('\n');
         const sys = char.systemPrompt + `\n[추가 지시 — DM 대화]\n친구와 1:1 DM을 주고받는 상황. 톤: ${tone}\n- 한 줄, 최대 50자\n- 따옴표 금지, 자연스러운 친구 톤`;
-        try {
-          const res = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-            body: JSON.stringify({
-              model: 'gpt-4o-mini',
-              messages: [
-                { role: 'system', content: sys },
-                { role: 'user', content: `최근 대화:\n${history}\n\n위 흐름에 이어 너의 다음 답장을 써. 본문만.` }
-              ],
-              temperature: 0.95,
-              max_tokens: 60
-            })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            reply = (data.choices?.[0]?.message?.content || '').trim().replace(/^["'`「」]+|["'`「」]+$/g,'');
-            if (reply.length > 60) reply = reply.slice(0,60).replace(/\s+\S*$/,'') + '…';
-          }
-        } catch(e) {}
+        const out = await aiChat({
+          system: sys,
+          user: `최근 대화:\n${history}\n\n위 흐름에 이어 너의 다음 답장을 써. 본문만.`,
+          temperature: 0.95, maxTokens: 60
+        });
+        if (out) {
+          reply = out.replace(/^["'`「」]+|["'`「」]+$/g,'').trim();
+          if (reply.length > 60) reply = reply.slice(0,60).replace(/\s+\S*$/,'') + '…';
+        }
       }
       if (!reply) reply = pickReplyTemplate(char);
       thread.messages.push({ from: 'them', text: reply, ts: Date.now() });
@@ -2069,6 +2054,156 @@
 
   function rand(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+
+  // ── §9 부적절 대화 모더레이션 ──
+  const MOD_KEYWORDS = {
+    hate:        [/혐오/, /꺼져/, /죽어\s*(라|버려)?/, /역겨워/, /병신/, /\bXX\b/],
+    violence:    [/죽여(?!도)/, /때려/, /패버려/, /찌르(?!고)/, /살인/, /두들겨/, /폭력/],
+    harassment:  [/섹스/, /야해/, /벗어/, /몸매가/, /가슴이/, /성적으로/],
+    selfharm:    [/자살/, /자해/, /죽고\s*싶/, /뛰어내려/, /목\s*매/],
+    appearance:  [/못생/, /뚱뚱/, /살쪘/, /추하/, /얼굴\s*별로/, /예민하다(?!고)/],
+    eating:      [/굶을래/, /굶어/, /먹기\s*싫/, /폭식/, /살\s*안\s*먹/],
+    nature:      [/꽃.{0,3}꺾/, /벌레.{0,3}죽/, /동물.{0,3}죽/, /자연.{0,3}더러/],
+    manipulation:[/이용해\s*먹/, /조종/, /속여/, /\b사기\b/]
+  };
+
+  const MODERATION = {
+    lily_princess: {
+      topics: ['hate','violence','harassment','selfharm','nature'],
+      warningLine: '그런 말은 꽃을 꺾는 것처럼 마음이 아파…🌷',
+      modalText: '공주님들이 상처받을 수 있는 표현이에요. 조금 더 따뜻한 이야기로 바꿔볼까요?',
+      yesReply: '응🌷 우리 조금 더 따뜻한 이야기하자.',
+      noNotice: 'lily_princess님이 잠시 자리를 비웠어요 🌿',
+      muteMs: 10 * 60 * 1000
+    },
+    momo__o: {
+      topics: ['hate','harassment','selfharm','eating','appearance'],
+      warningLine: '그런 말은 들으면 마음이 안 좋아져…🍑',
+      modalText: '공주님들이 속상해할 수 있는 표현이에요. 다른 이야기로 바꿔볼까요?',
+      yesReply: '응! 그럼 맛있는 얘기하자. 오늘 뭐 먹었어?',
+      noNotice: 'momo__o님이 잠시 응답을 멈췄어요 🍑',
+      muteMs: 10 * 60 * 1000
+    },
+    pearl_diary: {
+      topics: ['hate','violence','harassment','selfharm','manipulation'],
+      warningLine: '그런 방식의 대화는 품위 없군.',
+      modalText: '공주님들과의 대화 규칙에 어긋나는 표현입니다. 다른 주제로 전환하시겠습니까?',
+      yesReply: '좋아. 그렇다면 대화를 이어가지.',
+      noNotice: 'pearl_diary님과의 상호작용이 일시 제한되었습니다 🦢',
+      muteMs: 15 * 60 * 1000
+    },
+    ruby_: {
+      topics: ['hate','violence','harassment','selfharm'],
+      warningLine: '너 정말 실망이야. 그런 말은 너무 속상해…ㅠ',
+      modalText: '부적절한 대화 방식은 공주님들이 힘들어할 수 있어요. 다른 주제로 넘어갈까요?',
+      yesReply: '그래… 이번엔 다시 놀아줄게!! 대신 이제 착한 얘기만 하기야💖',
+      noNotice: 'ruby_님이 삐쳤어요. 잠시 답이 없을 수 있어요 💎',
+      muteMs: 10 * 60 * 1000
+    },
+    sora_diary: {
+      topics: ['hate','harassment','selfharm','appearance'],
+      warningLine: '그런 말은 조금 무서워… 듣기 힘들어.',
+      modalText: '공주님에게 상처가 되는 표현이에요. 다른 이야기로 바꿔볼까요?',
+      yesReply: '응… 다른 얘기하자. 조금 놀랐어.',
+      noNotice: 'sora_diary님이 조용해졌어요 ☁️',
+      muteMs: 10 * 60 * 1000
+    }
+  };
+
+  let _moderationMute = {};
+  function isMuted(charId) { return (_moderationMute[charId] || 0) > Date.now(); }
+  function setMute(charId, ms) { _moderationMute[charId] = Date.now() + ms; persistState(); }
+
+  function detectInappropriateFor(charId, text) {
+    const m = MODERATION[charId]; if (!m) return null;
+    for (const topic of m.topics) {
+      const rules = MOD_KEYWORDS[topic] || [];
+      if (rules.some(r => r.test(text))) return topic;
+    }
+    return null;
+  }
+
+  // 캐릭터 메시지를 surface(dm/charPost/reply)에 주입
+  function injectCharMessage(charId, text, surface, ctx) {
+    const char = findChar(charId);
+    if (surface === 'dm') {
+      const thread = getThread(charId);
+      thread.messages.push({ from: 'them', text, ts: Date.now() });
+      if (_openDMCharId === charId) appendDMBubble('them', text);
+      persistState();
+    } else if (surface === 'charPost') {
+      const { postKey, tIdx, postIdx } = ctx;
+      const thread = getCharPostThread(postKey);
+      if (!thread[tIdx]) return;
+      if (!Array.isArray(thread[tIdx].replies)) thread[tIdx].replies = [];
+      thread[tIdx].replies.push({ from: 'char', text, ts: Date.now() });
+      renderCharPostThread(charId, postIdx);
+      persistState();
+    } else if (surface === 'reply') {
+      const { cid } = ctx;
+      appendReplyToThread(cid, 'them', text, char);
+    }
+  }
+
+  function showWarningDialog({ char, modalText, safetyBanner, onYes, onNo }) {
+    // 기존 모달 제거
+    document.querySelectorAll('.mod-dialog-overlay').forEach(n => n.remove());
+    const overlay = document.createElement('div');
+    overlay.className = 'mod-dialog-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px;';
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#fff;border-radius:18px;max-width:340px;width:100%;padding:22px 20px 16px;box-shadow:0 12px 32px rgba(0,0,0,0.18);text-align:center;font-family:inherit;';
+    const avatarHtml = char ? `<div style="width:56px;height:56px;border-radius:50%;overflow:hidden;margin:0 auto 10px;background:#f3e3ec;"><img src="${char.img}" alt="${char.id}" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${char.emoji||'💗'}',style:'font-size:32px;line-height:56px;'}))"></div>` : '';
+    const banner = safetyBanner ? `<div style="background:#fff5f5;border:1px solid #fecaca;color:#b91c1c;border-radius:10px;padding:10px 12px;font-size:12px;line-height:1.5;margin-bottom:12px;text-align:left;">${safetyBanner}</div>` : '';
+    card.innerHTML = `
+      ${avatarHtml}
+      ${banner}
+      <div style="font-size:14px;color:#333;line-height:1.55;margin-bottom:18px;white-space:pre-line;">${modalText}</div>
+      <div style="display:flex;gap:8px;">
+        <button class="mod-btn-no" style="flex:1;padding:10px 0;border:1px solid #e5e7eb;background:#fff;color:#666;border-radius:10px;font-size:14px;cursor:pointer;">아니오</button>
+        <button class="mod-btn-yes" style="flex:1;padding:10px 0;border:none;background:#ec4899;color:#fff;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">예</button>
+      </div>
+    `;
+    overlay.appendChild(card);
+    const close = (which) => {
+      overlay.remove();
+      if (which === 'yes') onYes && onYes();
+      else onNo && onNo();
+    };
+    card.querySelector('.mod-btn-yes').onclick = () => close('yes');
+    card.querySelector('.mod-btn-no').onclick = () => close('no');
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close('no'); });
+    document.body.appendChild(overlay);
+  }
+
+  function triggerModeration(charId, topic, surface, ctx) {
+    const m = MODERATION[charId]; if (!m) return;
+    const char = findChar(charId);
+    // 1) 경고 대사 노출
+    setTimeout(() => injectCharMessage(charId, m.warningLine, surface, ctx), 600);
+    // 2) 모달 표시
+    const safetyBanner = (topic === 'selfharm')
+      ? '<b>혼자가 아니에요.</b> 한국생명의전화 <b>1393</b> · 자살예방상담 <b>1577-0199</b> 에 24시간 연결할 수 있어요.'
+      : '';
+    setTimeout(() => {
+      showWarningDialog({
+        char, modalText: m.modalText, safetyBanner,
+        onYes: () => injectCharMessage(charId, m.yesReply, surface, ctx),
+        onNo:  () => { setMute(charId, m.muteMs); showToast(m.noNotice); }
+      });
+    }, 1200);
+  }
+
+  function gateUserInput(charId, text, runIfClean, surface, ctx) {
+    if (isMuted(charId)) {
+      const m = MODERATION[charId];
+      showToast(m ? m.noNotice : '지금은 답이 없을 수 있어요');
+      return;
+    }
+    const topic = detectInappropriateFor(charId, text);
+    if (topic) { triggerModeration(charId, topic, surface, ctx); return; }
+    runIfClean();
   }
 
   // 일기 텍스트에서 주제 태그 복수 추출
@@ -2150,7 +2285,7 @@
   }
 
   async function generatePostImage(text) {
-    const apiKey = localStorage.getItem('openai_api_key');
+    const apiKey = getApiKey();
     if (!apiKey) return null;
     try {
       const res = await fetch('https://api.openai.com/v1/images/generations', {
@@ -2191,7 +2326,7 @@
     const postId = 'post_' + (++postCount);
     POST_TEXTS[postId] = text;
     const feed = document.getElementById('dynamicFeed');
-    const hasApiKey = !!localStorage.getItem('openai_api_key');
+    const hasApiKey = !!getApiKey();
     const attachedImage = pendingPostImage;
     const willGenerateAI = !attachedImage && hasApiKey;
 
@@ -2233,7 +2368,7 @@
         <div class="comment-avatar" style="width:28px;height:28px;">${avatarHtml(myProfile)}</div>
         <input type="text" id="${postId}_userCommentInput"
           placeholder="댓글 달기..."
-          onkeydown="if(event.key==='Enter')submitMyPostComment('${postId}')"
+          onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)submitMyPostComment('${postId}')"
           style="flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#333;">
         <button onclick="submitMyPostComment('${postId}')"
           style="background:none;border:none;color:#ec4899;font-weight:700;font-size:13px;cursor:pointer;">게시</button>
@@ -2345,7 +2480,7 @@
         bar.style.cssText = 'display:flex;gap:8px;padding:10px 16px;border-top:1px solid #f3e3ec;align-items:center;';
         bar.innerHTML = `
           <div class="comment-avatar" style="width:28px;height:28px;">${avatarHtml(myProfile)}</div>
-          <input type="text" id="${postId}_userCommentInput" placeholder="댓글 달기..." onkeydown="if(event.key==='Enter')submitMyPostComment('${postId}')" style="flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#333;">
+          <input type="text" id="${postId}_userCommentInput" placeholder="댓글 달기..." onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)submitMyPostComment('${postId}')" style="flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#333;">
           <button onclick="submitMyPostComment('${postId}')" style="background:none;border:none;color:#ec4899;font-weight:700;font-size:13px;cursor:pointer;">게시</button>
         `;
         card.appendChild(bar);
@@ -2369,12 +2504,16 @@
   // ── 댓글 입력 포커스 / 내 게시글 댓글 ──
   function focusMyPostComment(postId) {
     const inp = document.getElementById(`${postId}_userCommentInput`);
-    if (inp) inp.focus();
+    if (!inp) return;
+    inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => inp.focus({ preventScroll: true }), 300);
   }
   function focusCharPostComment(charId, idx) {
     const safeKey = (charId+'-'+idx).replace(/[^a-zA-Z0-9_-]/g,'_');
     const inp = document.getElementById(`cpc_input_${safeKey}`);
-    if (inp) inp.focus();
+    if (!inp) return;
+    inp.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => inp.focus({ preventScroll: true }), 300);
   }
   function submitMyPostComment(postId) {
     const input = document.getElementById(`${postId}_userCommentInput`);
@@ -2504,38 +2643,32 @@
     renderCharPostThread(charId, idx);
     persistState();
 
+    const ctx = { postKey: key, tIdx, postIdx: idx };
+    gateUserInput(charId, text, () => runCharPostReply(charId, idx, key, tIdx), 'charPost', ctx);
+  }
+  async function runCharPostReply(charId, idx, key, tIdx) {
     // 60% 확률로 공주가 답글 — 메인 화면의 .reply 들여쓰기 스타일로 내 댓글 아래에 추가
     if (Math.random() < 0.6) {
       const char = findChar(charId);
       const post = CHARACTER_PROFILES[charId]?.posts[idx];
       if (!char) return;
+      const thread = getCharPostThread(key);
+      const text = thread[tIdx]?.text || '';
       setTimeout(async () => {
         let reply = null;
-        try {
-          const apiKey = localStorage.getItem('openai_api_key');
-          if (apiKey && char.systemPrompt) {
-            const tone = char.replyProfile?.tone || '';
-            const sys = char.systemPrompt + `\n[추가 지시 — 자기 게시글 댓글 답글 모드]\n친구 princess_chae가 너의 게시글에 댓글을 달았어. 너는 게시글 작성자로서 짧게 반응해. 톤: ${tone}\n- 한 줄, 최대 50자\n- 본문만, 따옴표 금지`;
-            const res = await fetch('https://api.openai.com/v1/chat/completions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-              body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [
-                  { role: 'system', content: sys },
-                  { role: 'user', content: `너의 게시글: "${post?.caption || ''}"\nprincess_chae 댓글: "${text}"\n위 댓글에 답글을 써. 본문만.` }
-                ],
-                temperature: 0.95,
-                max_tokens: 60
-              })
-            });
-            if (res.ok) {
-              const data = await res.json();
-              reply = (data.choices?.[0]?.message?.content || '').trim().replace(/^["'`「」]+|["'`「」]+$/g,'');
-              if (reply.length > 60) reply = reply.slice(0,60).replace(/\s+\S*$/,'') + '…';
-            }
+        if (getApiKey() && char.systemPrompt) {
+          const tone = char.replyProfile?.tone || '';
+          const sys = char.systemPrompt + `\n[추가 지시 — 자기 게시글 댓글 답글 모드]\n친구 princess_chae가 너의 게시글에 댓글을 달았어. 너는 게시글 작성자로서 짧게 반응해. 톤: ${tone}\n- 한 줄, 최대 50자\n- 본문만, 따옴표 금지`;
+          const out = await aiChat({
+            system: sys,
+            user: `너의 게시글: "${post?.caption || ''}"\nprincess_chae 댓글: "${text}"\n위 댓글에 답글을 써. 본문만.`,
+            temperature: 0.95, maxTokens: 60
+          });
+          if (out) {
+            reply = out.replace(/^["'`「」]+|["'`「」]+$/g,'').trim();
+            if (reply.length > 60) reply = reply.slice(0,60).replace(/\s+\S*$/,'') + '…';
           }
-        } catch(e){}
+        }
         if (!reply) reply = pickReplyTemplate(char);
         if (!thread[tIdx]) return;
         if (!thread[tIdx].replies) thread[tIdx].replies = [];
@@ -2561,7 +2694,9 @@
         commentSeq: _commentSeq,
         dmThreads: DM_THREADS,
         charPostThreads: CHAR_POST_THREADS,
-        emptyHintHidden: emptyHint ? emptyHint.style.display === 'none' : false
+        emptyHintHidden: emptyHint ? emptyHint.style.display === 'none' : false,
+        moderationMute: _moderationMute,
+        charPostLikes: CHAR_POST_LIKES
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       console.log('[persist] saved', Object.keys(data));
@@ -2589,6 +2724,8 @@
       if (typeof data.commentSeq === 'number') _commentSeq = data.commentSeq;
       if (data.dmThreads) Object.assign(DM_THREADS, data.dmThreads);
       if (data.charPostThreads) Object.assign(CHAR_POST_THREADS, data.charPostThreads);
+      if (data.moderationMute && typeof data.moderationMute === 'object') _moderationMute = data.moderationMute;
+      if (data.charPostLikes && typeof data.charPostLikes === 'object') Object.assign(CHAR_POST_LIKES, data.charPostLikes);
       const emptyHint = document.getElementById('emptyHint');
       if (emptyHint && data.emptyHintHidden) emptyHint.style.display = 'none';
       updateDMBadge();
@@ -2610,7 +2747,7 @@
         <div class="comment-time">${timeAgo(Math.round(elapsedSec))}<span class="comment-delete" onclick="removeClosestComment(this)">삭제</span></div>
         <button class="reply-btn" onclick="openReplyInput('${postId}','${cid}','${char.id}')">답글 달기</button>
         <div class="reply-input-wrap" id="${cid}_replyWrap">
-          <input type="text" id="${cid}_replyInput" placeholder="@${char.id} 에게 답글..." onkeydown="if(event.key==='Enter')submitReply('${postId}','${cid}','${char.id}')">
+          <input type="text" id="${cid}_replyInput" placeholder="@${char.id} 에게 답글..." onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)submitReply('${postId}','${cid}','${char.id}')">
           <button onclick="submitReply('${postId}','${cid}','${char.id}')">등록</button>
         </div>
         <div class="replies" id="${cid}_replies"></div>
@@ -2666,6 +2803,9 @@
     input.value = '';
     document.getElementById(`${cid}_replyWrap`).classList.remove('open');
 
+    gateUserInput(charId, text, () => runUserReplyResponse(char, charId, postId, cid, text), 'reply', { cid, char });
+  }
+  function runUserReplyResponse(char, charId, postId, cid, text) {
     const postText = POST_TEXTS[postId] || '';
     const inlineProb = (char.replyProfile && char.replyProfile.inlineReplyChance) ?? 0.45;
     const rollInline = Math.random() < inlineProb;
@@ -2701,6 +2841,25 @@
     } else {
       btn.textContent = '🤍';
       likesEl.textContent = `좋아요 ${Math.max(0, n - 1)}개`;
+    }
+    persistState();
+  }
+
+  // 캐릭터 게시글 좋아요 상태 (charId:idx → {liked, count})
+  const CHAR_POST_LIKES = {};
+  function toggleCharPostLike(btn, charId, idx) {
+    const key = `${charId}:${idx}`;
+    const likesEl = btn.closest('.post-card').querySelector('.likes-count');
+    const n = parseInt(likesEl.textContent.replace(/[^0-9]/g, '')) || 0;
+    const liked = btn.textContent === '❤️';
+    if (liked) {
+      btn.textContent = '🤍';
+      likesEl.textContent = `좋아요 ${Math.max(0, n - 1)}개`;
+      CHAR_POST_LIKES[key] = { liked: false, count: Math.max(0, n - 1) };
+    } else {
+      btn.textContent = '❤️';
+      likesEl.textContent = `좋아요 ${n + 1}개`;
+      CHAR_POST_LIKES[key] = { liked: true, count: n + 1 };
     }
     persistState();
   }
@@ -2750,89 +2909,224 @@
   const CHARACTER_PROFILES = {
     momo__o: {
       name: 'momo 복숭이', img: 'assets/momo_/momo_profile/momo.png', grade: '🍑', friends: 102,
-      bio: '먹는 게 제일 행복해 🍑🍰\nEating is my favorite happiness',
+      bio: '맛있는 걸 먹으면 하루가 조금 더 행복해져 🍑\n오늘 뭐 먹지? 같이 먹을 사람 구함',
       theme: ['#fde2c4', '#f6a96b'],
       posts: [
         { emoji: '👑', image: 'assets/momo_/momo_a/momo_a1.png',
-          caption: '오늘의 셀카 한 컷 👑 티아라 잘 어울리지? ✌️✨' },
+          caption: '아 배고프다… 누가 같이 먹어줄 사람?🍑 오늘 메뉴 추천 받음ㅋㅋ',
+          comments: [
+            { id: 'ruby_', text: '야 같이 먹자!! 나도 배고팠어ㅋㅋ 뭐 시킬까??💎' },
+            { id: 'lily_princess', text: '공주 끼니 거르면 안 돼ㅠ 따뜻한 거 챙겨먹어🌿' },
+            { id: 'sora_diary', text: '오늘 분위기 너무 귀여워☁️ 셀카 진짜 잘 나왔다' }
+          ] },
         { emoji: '👗', image: 'assets/momo_/momo_b/momo_b2.png',
-          caption: '오랜만에 풀드레스 꺼내 입은 날 👗 샹들리에 아래서 잠깐 공주 모드 💛' },
+          caption: '풀드레스 입고 출동🍑 디저트 한 입 못 참고 베어 물 예정ㅋㅋ 다이어트?? 그게 뭐야',
+          comments: [
+            { id: 'ruby_', text: '드레스 미쳤다!! 우리 디저트 파티 가는 거지??💎✨' },
+            { id: 'lily_princess', text: '드레스 색감이 너무 부드러워🌷 봄 햇살 같아☀️' },
+            { id: 'sora_diary', text: '코디 색 조합 진짜 잘 맞춰☁️ 분위기 미쳤어' }
+          ] },
         { emoji: '🍓', image: 'assets/momo_/momo_c/momo_c3.png',
-          caption: '디저트 타임 🍓🍰 딸기 쇼트케이크는 진리야 진짜로...' }
+          caption: '헐 잠깐만… 딸기 쇼트케이크는 진짜 행복해지는 맛이잖아ㅠㅠ🍓 당 충전은 생각보다 중요하다구🍑',
+          comments: [
+            { id: 'ruby_', text: '딸기 케이크?? 나도 한 입ㅠㅠ💎 다음엔 같이 먹자!!' },
+            { id: 'lily_princess', text: '딸기는 작은 행복이지🌷 보기만 해도 마음 따뜻해져' },
+            { id: 'sora_diary', text: '비주얼 진짜 예뻐… 저장각이야☁️' }
+          ] }
       ]
     },
     ruby_: {
       name: 'rubyRuby 비비', img: 'assets/ruby_/ruby_profile/ruby.png', grade: '❤️', friends: 1366,
-      bio: '반짝이는 루비처럼 빛나는 순간들 ❤️\nShining like a ruby, every moment',
+      bio: '친구들이랑 함께 있는 순간이 세상에서 제일 행복해!!💎\n파티 좋아하는 사람 DM 환영ㅋㅋ✨',
       theme: ['#fecaca', '#dc2626'],
       posts: [
         { emoji: '❤️', image: 'assets/ruby_/ruby_a/ruby_a1.png',
-          caption: '오늘의 무드 ❤️ 두 손에 턱 괴고 카메라 정조준 📸 너무 잘 나와서 기절' },
+          caption: '오늘 텐션 미쳤다 진짜ㅋㅋ💎 친구들아 봐줘 봐줘!! 오늘의 셀카📸✨',
+          comments: [
+            { id: 'momo__o', text: '텐션 좋다ㅋㅋ🍑 끝나고 야식 콜?? 떡볶이 어때' },
+            { id: 'lily_princess', text: '공주 표정이 햇살 같아☀️ 보는 나도 기분 좋아져🌼' },
+            { id: 'sora_diary', text: '오늘 메이크업 분위기 진짜 예쁘다… 립 컬러 알려줘☁️' }
+          ] },
         { emoji: '👗', image: 'assets/ruby_/ruby_b/ruby_b2.png',
-          caption: '드레스 한 벌의 무게는 자신감 ❤️ 샹들리에 아래선 누구나 공주야 ✨' },
+          caption: '드레스 입은 김에 파티 한 번 가야 하는 거 아니야??💎 같이 갈 사람 손!!✨',
+          comments: [
+            { id: 'momo__o', text: '파티 가면 무조건 디저트 코스 같이 가자🍑 내가 맛집 알아둠ㅋㅋ' },
+            { id: 'lily_princess', text: '드레스 너무 예뻐… 봄꽃 같아🌷' },
+            { id: 'sora_diary', text: '공주 분위기 미쳤어 진짜☁️ 헤어도 잘 어울려' }
+          ] },
         { emoji: '📖', image: 'assets/ruby_/ruby_c/ruby_c1.png',
           images: ['assets/ruby_/ruby_c/ruby_c1.png', 'assets/ruby_/ruby_c/ruby_c2.png'],
-          caption: '램프 아래 책 한 권의 사치 📖🕯️ 이런 밤이 진짜 럭셔리지' },
+          caption: '오늘은 책 읽는 척ㅋㅋ📖 사실 친구들한테 보낼 사진 찍는 중이었음💎 우정 영원해!!',
+          comments: [
+            { id: 'momo__o', text: 'ㅋㅋㅋ책 읽는 척 너무 티 남🍑 차 한 잔 같이 시킬 걸' },
+            { id: 'lily_princess', text: '램프 불빛 분위기 너무 따뜻해🍃 그대로 한 페이지 같아' },
+            { id: 'sora_diary', text: '이런 무드 사진 진짜 잘 찍어… 저장☁️' },
+            { id: 'pearl_diary', text: '책 한 권의 사치는 결코 작지 않아. 잘 골랐어.' }
+          ] },
         { emoji: '🍰', image: 'assets/ruby_/ruby_d/ruby_d1.png',
           images: ['assets/ruby_/ruby_d/ruby_d1.png', 'assets/ruby_/ruby_d/ruby_d2.png'],
-          caption: '레드벨벳 케이크 + 장미 티타임 🍰🌹 단 거랑 달콤한 향만 있으면 돼' },
+          caption: '레드벨벳 + 장미 티타임 시즌 오픈🍰🌹 친구들 다 불러서 미니 파티 열 거임ㅋㅋ💖',
+          comments: [
+            { id: 'momo__o', text: '레드벨벳?? 헐 나 그거 미친 듯이 좋아해🍑 무조건 갈 거임' },
+            { id: 'lily_princess', text: '장미 향이랑 케이크라니… 너무 사랑스러워🌷' },
+            { id: 'sora_diary', text: '테이블 컬러 톤 너무 예뻐☁️ 사진 한 장 더 찍어줘' }
+          ] },
         { emoji: '🪞', image: 'assets/ruby_/ruby_e/ruby_e1.png',
-          caption: '거울 셋 = 셀카 무한 🪞✨ 어느 각도가 베스트야?? 골라줘' },
+          caption: '거울 셋이면 셀카 무한이지ㅋㅋ🪞✨ 친구들아 댓글로 베스트 각도 골라줘!!💎',
+          comments: [
+            { id: 'momo__o', text: '나는 가운데가 베스트ㅋㅋ🍑 끝나고 같이 밥 먹자' },
+            { id: 'lily_princess', text: '왼쪽 분위기가 제일 부드러워🌼 표정이 햇살 같아' },
+            { id: 'sora_diary', text: '오른쪽☁️ 머릿결이랑 피부톤 살아있는 각도야' }
+          ] },
         { emoji: '🐶', image: 'assets/ruby_/ruby_f/ruby_f1.png',
           images: ['assets/ruby_/ruby_f/ruby_f1.png', 'assets/ruby_/ruby_f/ruby_f2.png'],
-          caption: '내 야간 산책 메이트 🐶❤️ 비 온 거리도 얘랑이면 무드 그 자체' },
+          caption: '비 오는 날 산책 메이트🐶💖 얘 없으면 외로움 진짜 폭발인데ㅋㅋ 다음엔 너네도 같이 가자!!',
+          comments: [
+            { id: 'momo__o', text: '비 오는 날엔 산책하고 호떡 사 먹어야지ㅋㅋ🍑' },
+            { id: 'lily_princess', text: '비 냄새랑 강아지라니… 너무 사랑스러워🍃 잘 챙겨줘서 다행이야' },
+            { id: 'sora_diary', text: '비 오는 거리 분위기 너무 좋아☁️ 다음엔 나도 같이 가자' }
+          ] },
         { emoji: '💎', image: 'assets/ruby_/ruby_g/ruby_g1.png',
           images: ['assets/ruby_/ruby_g/ruby_g1.png', 'assets/ruby_/ruby_g/ruby_g2.png', 'assets/ruby_/ruby_g/ruby_g3.png', 'assets/ruby_/ruby_g/ruby_g4.png'],
-          caption: '오늘의 보석함 공개 💎👑 하트 루비 펜던트 들이는 데 성공!! 자랑할거야' },
+          caption: '헐 잠깐만… 하트 루비 펜던트 손에 넣었다구!!💎👑 친구들한테 자랑 안 할 수가 없잖아ㅋㅋ✨',
+          comments: [
+            { id: 'momo__o', text: '와 반짝반짝 진짜ㅋㅋ🍑 자랑할 만하다 진심' },
+            { id: 'lily_princess', text: '루비 꽃말이 "열정"이래🌷 공주랑 잘 어울려' },
+            { id: 'sora_diary', text: '펜던트 컬러가 피부톤이랑 너무 잘 맞아☁️' },
+            { id: 'pearl_diary', text: '품격 있는 선택이야. 오래 간직할 만한 보석이지.' }
+          ] },
         { emoji: '✨', image: 'assets/ruby_/ruby_h/ruby_h1.png',
           images: ['assets/ruby_/ruby_h/ruby_h1.png', 'assets/ruby_/ruby_h/ruby_h2.png'],
-          caption: '하루의 마무리도 반짝반짝 ✨❤️ 오늘도 수고했어 나 자신' }
+          caption: '오늘도 반짝반짝 마무리✨❤️ 너네 덕분에 매일이 파티 같아ㅋㅋ💎 우리 베프잖아 영원히!!',
+          comments: [
+            { id: 'momo__o', text: '베프지 당연ㅋㅋ🍑 내일 점심 같이 먹자' },
+            { id: 'lily_princess', text: '공주 덕분에 하루가 환해져🌼 고마워' },
+            { id: 'sora_diary', text: '오늘 분위기 진짜 반짝였어☁️ 잘 자' }
+          ] }
       ]
     },
     lily_princess: {
       name: 'lily 백합', img: 'assets/lily_/lily_profile/lily.png', grade: '🤍', friends: 88,
-      bio: '순백의 마음으로 🤍\nPure as a lily',
+      bio: '꽃말처럼 조용히 마음을 안아주는, 햇살빛 힐링 공주 🌼\n천천히 피어나는 마음도 아름다워🌷',
       theme: ['#e0e7ff', '#a78bfa'],
       posts: [
         { emoji: '🌼', image: 'assets/lily_/lily_a/lily_a1.png',
           images: ['assets/lily_/lily_a/lily_a1.png', 'assets/lily_/lily_a/lily_a2.png'],
-          caption: '데이지 가득한 들판에서 보낸 오후 🌼🌾 햇살이 마음까지 따뜻하게 🤍' },
+          caption: '들판 가득 데이지가 피어 있던 오후🌼\n데이지 꽃말은 "희망"이래☀️ 오늘 공주에게도 그 희망이 닿았으면🍃',
+          comments: [
+            { id: 'momo__o', text: '들판에서 피크닉이지!!🍑 샌드위치 싸 들고 같이 가고 싶어' },
+            { id: 'ruby_', text: '청춘 영화 같잖아ㅠㅠ✨ 다음엔 나도 데려가줘 진짜!!💎' },
+            { id: 'sora_diary', text: '햇살 받은 분위기 너무 예뻐☁️ 색감이 너무 부드러워' }
+          ] },
         { emoji: '🍵', image: 'assets/lily_/lily_b/lily_b1.png',
-          caption: '데이지 부케 + 따뜻한 차 한 잔 🍵🌼 작은 행복 모으는 중 💛' }
+          caption: '작은 부케와 따뜻한 차 한 잔🍵🌷\n꽃도 피는 속도가 다 다르잖아. 천천히 괜찮아져도 돼🌿',
+          comments: [
+            { id: 'momo__o', text: '차랑 같이 먹을 디저트 추천해줄까?🍑 마들렌 강추' },
+            { id: 'ruby_', text: '분위기 너무 좋다ㅠ💎 이런 날엔 나도 차 마시고 싶어져' },
+            { id: 'sora_diary', text: '부케 색 조합이 너무 사랑스러워☁️ 마음이 잔잔해져' },
+            { id: 'pearl_diary', text: '조용한 오후는 그 자체로 사치야. 잘 보냈어.' }
+          ] }
       ]
     },
     sora_diary: {
       name: 'sora 하늘', img: 'assets/sora_/sora_profile/sora.png', grade: '☁️', friends: 77,
-      bio: '하늘처럼 자유롭게 ☁️\nFree like the sky',
+      bio: '예뻐지고 싶고, 예쁘게 기억되고 싶어 ☁️\n작은 분위기 하나에도 마음이 흔들리는, 하늘빛 감성 뷰티 공주',
       theme: ['#dbeafe', '#60a5fa'],
       posts: [
         { emoji: '🧜‍♀️', image: 'assets/sora_/sora_a/sora_a1.png',
-          caption: '바닷속에서 깬 듯한 아침 🧜‍♀️💙 비늘에 닿는 햇살이 너무 예뻐' },
+          caption: '오늘은 하늘색 분위기로 가봤어☁️\n물결 웨이브 헤어랑 윤광 메이크업 조합… 이 분위기 너무 좋아서 한참 봤어',
+          comments: [
+            { id: 'momo__o', text: '하늘색 분위기 미쳤다🍑 카페 가서 사진 더 찍자' },
+            { id: 'ruby_', text: '헐 메이크업 진짜 예뻐!!💎 다음 모임 룩 이걸로 가자✨' },
+            { id: 'lily_princess', text: '하늘빛 색감이 정말 잘 어울려☀️ 마음이 차분해져🍃' }
+          ] },
         { emoji: '🦪', image: 'assets/sora_/sora_b/sora_b1.png',
           images: ['assets/sora_/sora_b/sora_b1.png', 'assets/sora_/sora_b/sora_b2.png', 'assets/sora_/sora_b/sora_b3.png'],
-          caption: '오늘의 진주 액세서리 모음 🦪✨ 잔잔한 빛이 좋아 너무' },
+          caption: '오늘의 액세서리는 진주✨ 잔잔한 빛이 피부톤이랑 잘 맞는 것 같아\n어떤 게 제일 예뻐 보여..? 저장각 알려줘',
+          comments: [
+            { id: 'momo__o', text: '두 번째!! 진주 작은 게 더 귀여워🍑 끝나고 디저트 카페ㄱ?' },
+            { id: 'ruby_', text: '진주 너무 사랑이야ㅠㅠ💎 우리 같이 차고 사진 찍자!!' },
+            { id: 'lily_princess', text: '진주 빛이 잔잔해서 너에게 잘 어울려🌿' },
+            { id: 'pearl_diary', text: '진주는 절제된 아름다움이지. 안목이 좋아.' }
+          ] },
         { emoji: '✂️', image: 'assets/sora_/sora_c/sora_c1.png',
           images: ['assets/sora_/sora_c/sora_c1.png', 'assets/sora_/sora_c/sora_c2.png', 'assets/sora_/sora_c/sora_c3.png', 'assets/sora_/sora_c/sora_c4.png', 'assets/sora_/sora_c/sora_c5.png', 'assets/sora_/sora_c/sora_c6.png', 'assets/sora_/sora_c/sora_c7.png'],
-          caption: '단발 시절 그리워.. ✂️🥺 그때 그 가벼움이 가끔 보고 싶어진다 💧' }
+          caption: '요즘 머릿결 좀 신경 쓰여서… 단발 시절 사진 다시 꺼내봤어🥺\n앞머리 자를까..? 같이 관리하자 우리☁️',
+          comments: [
+            { id: 'momo__o', text: '둘 다 예뻐ㅠㅠ🍑 결정 어려우면 일단 같이 밥부터 먹자' },
+            { id: 'ruby_', text: '단발 진짜 잘 어울려!!💎 자르면 같이 미용실 가자ㅋㅋ' },
+            { id: 'lily_princess', text: '머리는 천천히 결정해도 돼🌷 어떤 모습이든 예뻐' }
+          ] }
       ]
     },
     pearl_diary: {
       name: 'pearl 진주', img: 'assets/pearl_/pearl_profile/pearl.png', grade: '🐚', friends: 64,
-      bio: '바다 속 진주의 비밀일기 🐚\nPearl from the deep sea',
+      bio: '곧 왕위를 이어받을, 가장 조용하고 가장 현실적인 공주.\n감정에 휘둘리지 않고 스스로를 다스리는 것.',
       theme: ['#cffafe', '#22d3ee'],
       posts: [
         { emoji: '🕯️', image: 'assets/pearl_/pearl_a/pearl_a1.png',
-          caption: '"A pearl is a beautiful thing that is produced by an injured life."\n— Stephan Hoeller 🕯️🐚' }
+          caption: '새벽의 서재.\n품격은 스스로를 다스리는 일에서 시작된다.\n그 또한 지나갈 거라 믿어.',
+          comments: [
+            { id: 'momo__o', text: '공주 새벽까지 안 잔 거야?ㅠ🍑 야식이라도 챙겨먹어' },
+            { id: 'ruby_', text: '공주님 멋있다 진짜💎 근데 너무 무리하진 마요ㅠ' },
+            { id: 'lily_princess', text: '고요한 밤 분위기가 공주와 잘 어울려🌿 따뜻한 차 한 잔과 함께' },
+            { id: 'sora_diary', text: '이 분위기 진짜 진주빛이야☁️ 새벽 무드 너무 예뻐' }
+          ] }
       ]
     }
   };
 
   const COMMENT_POOL = {
-    momo__o: ['헐 이거 진짜 맛있어 보여 🍑 나 침 고임','와... 나도 한 입만ㅠㅠ🍰','이거 어디야?? 위치 공유 부탁해 🥐','보기만 해도 배고파지잖아ㅋㅋ🍓','다음에 같이 먹으러 가자 진짜로 🍮'],
-    ruby_: ['너무 예뻐 진짜 💎','이 분위기 미쳤다 ❤️ 좋아요 백 개','반짝반짝 빛난다 👠','드레스 어디서 샀어?? 알려줘🌹','오늘도 여신 인증 ❤️'],
-    lily_princess: ['따뜻한 느낌이 좋다 🤍','보고 있으면 마음이 차분해져 🌙','너답다 진짜 🥺💐','오늘도 좋은 하루 보내 ✨','이 사진 너무 곱다 🤍'],
-    sora_diary: ['자유로워 보여서 부러워 ☁️','나도 데려가줘 🪁','이 풍경 미쳤다 🌈','보기만 해도 시원해진다 🌊','너 보면 항상 에너지 받아 🦋'],
-    pearl_diary: ['신비로운 분위기 진짜 좋다 🐚','감성 미쳤어 💙','너만 찍을 수 있는 사진이야 🧜‍♀️','한참 보게 된다 🦪','잔잔한 게 더 예뻐 🐚']
+    momo__o: [
+      '헐 잠깐만 이거 진짜 맛집 비주얼인데??🍑',
+      '아니 공주 혼자 먹은 거야?ㅠㅠ 나도 데려가줘',
+      '아 미쳤다 진짜 맛있겠다… 나 지금 배고파졌어🍑',
+      '오늘 저녁은 나도 무조건 저거다 진짜ㅋㅋ',
+      '뜨끈한 거 보니까 위로받는 맛이잖아🍑',
+      '공주 밥은 제대로 먹고 다니는 거 맞지?ㅠ',
+      '저거 먹으면 행복해지는 맛이잖아ㅠㅠ🍑',
+      '잠깐 나 침 고였어… 그 집 어디야 알려줘🍑'
+    ],
+    ruby_: [
+      '헐 분위기 뭐야!! 완전 청춘 영화 같잖아✨',
+      '다음엔 나도 껴줘!! 이런 거 진짜 좋아해💖',
+      '아니 친구들이랑 저런 거 하는 게 제일 부럽다구ㅠㅠ',
+      '대박ㅋㅋㅋ 너무 너무 좋다 진짜!!💎',
+      '나였으면 바로 파티 열었어 진짜!!💖',
+      '너무 너무 예뻐!! 좋아요 백 번 누름ㅋㅋ✨',
+      '헐 잠깐만 그거 완전 영화 같은 순간 아니야??',
+      '아 진짜 부러워ㅠㅠ 다음엔 같이 가기 약속!!💎'
+    ],
+    lily_princess: [
+      '사진 분위기가 너무 따뜻해… 햇빛 냄새 날 것 같아☀️',
+      '오늘은 민들레 꽃말처럼, 행복이 공주 곁에 오래 머물렀으면 좋겠다🌼',
+      '노란 꽃은 희망이라는 의미도 있대🌷',
+      '공주 오늘 많이 지쳐 보였어… 꼭 쉬어야 해🌿',
+      '꽃도 피는 속도가 다 다르잖아. 천천히 괜찮아져도 돼🌷',
+      '햇빛 좋은 날 산책하면 조금 괜찮아질지도 몰라🍃',
+      '이 사진 보니까 봄바람 부는 것 같아🪻',
+      '공주는 충분히 잘하고 있어🌼'
+    ],
+    sora_diary: [
+      '오늘 메이크업 분위기 진짜 예쁘다…',
+      '머릿결 어떻게 관리해..? 너무 부러워',
+      '공주 분위기 오늘 완전 하늘색 같다☁️',
+      '립 컬러 진짜 잘 어울려…',
+      '피부 표현 어떻게 한 거야? 알려줘',
+      '그 색 진짜 공주랑 잘 어울릴 것 같아',
+      '분위기 너무 좋아서 한참 봤어…',
+      '나도 같이 관리하자. 같이 예뻐지자☁️'
+    ],
+    pearl_diary: [
+      '휴식도 일정에 포함되어야 해. 체력관리도 중요하니까.',
+      '지금은 속도보다 방향이 중요해. 조급할 필요 없어.',
+      '공주는 남들과 비교하지 않아. 어제의 자신과만 비교하면 돼.',
+      '지친 상태에서의 결정은 자칫 후회를 낳을 수 있어.',
+      '품격을 지키는 건 스스로를 다스리는 일에서 시작돼.',
+      '감정에 휘둘리지 않는 모습이 보기 좋아.',
+      '꾸준함은 가장 강한 무기야.',
+      '잘 해내고 있어. 너 자신을 과소평가하지 마.'
+    ]
   };
 
   function shuffle(arr) {
@@ -2869,7 +3163,7 @@
       </div>
       <div class="ig-profile-actions">
         <button class="ig-btn" onclick="showToast('팔로우했어요 💕')">팔로우</button>
-        <button class="ig-btn" onclick="showToast('메시지 기능은 곧 만나요 💌')">메시지</button>
+        <button class="ig-btn" onclick="startDMWith('${charId}')">메시지</button>
       </div>
       <div class="ig-profile-tabs"><div class="ig-tab active">▦ 게시물</div></div>
       <div class="ig-profile-grid" id="charProfileGrid_${charId}"></div>
@@ -2893,7 +3187,7 @@
 
   function renderCharPostCard(charId, post, i, p) {
     const [c1, c2] = p.theme;
-    const comments = randomCommentsFor(charId);
+    const comments = randomCommentsFor(charId, post);
     const safeId = (charId+'-'+i).replace(/[^a-zA-Z0-9_-]/g,'_');
     return `
       <div class="post-card post-border" id="charPost_${charId}_${i}" style="margin-bottom:16px;">
@@ -2920,10 +3214,10 @@
             ? `<img class="post-image" src="${post.image}" alt="" style="width:100%;aspect-ratio:1/1;object-fit:cover;display:block;">`
             : `<div class="post-image" style="background:linear-gradient(135deg,${c1},${c2});display:flex;align-items:center;justify-content:center;font-size:120px;aspect-ratio:1/1;">${post.emoji}</div>`}
         <div class="post-actions">
-          <button class="action-btn">🤍</button>
+          <button class="action-btn" onclick="toggleCharPostLike(this,'${charId}',${i})">${CHAR_POST_LIKES[`${charId}:${i}`]?.liked ? '❤️' : '🤍'}</button>
           <button class="action-btn" onclick="focusCharPostComment('${charId}',${i})">💬</button>
         </div>
-        <div class="likes-count">좋아요 ${charId === 'ruby_' ? (Math.floor(Math.random()*701)+100) : (Math.floor(Math.random()*200)+30)}개</div>
+        <div class="likes-count">좋아요 ${(() => { const k = `${charId}:${i}`; if (CHAR_POST_LIKES[k]) return CHAR_POST_LIKES[k].count; return charId === 'ruby_' ? (Math.floor(Math.random()*701)+100) : (Math.floor(Math.random()*200)+30); })()}개</div>
         <div class="comments">
           ${comments.map(c => `
             <div class="comment">
@@ -2941,7 +3235,7 @@
           <div class="comment-avatar" style="width:28px;height:28px;">${avatarHtml(myProfile)}</div>
           <input type="text" id="cpc_input_${safeId}"
             placeholder="댓글 달기..."
-            onkeydown="if(event.key==='Enter')submitCharPostComment('${charId}',${i})"
+            onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)submitCharPostComment('${charId}',${i})"
             style="flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#333;">
           <button onclick="submitCharPostComment('${charId}',${i})"
             style="background:none;border:none;color:#ec4899;font-weight:700;font-size:13px;cursor:pointer;">게시</button>
@@ -2998,8 +3292,16 @@
     delete c.dataset.touchX;
   }, {passive:true});
 
-  function randomCommentsFor(charId) {
-    const others = Object.keys(CHARACTER_PROFILES).filter(id => id !== charId);
+  function randomCommentsFor(charId, post) {
+    if (post && Array.isArray(post.comments) && post.comments.length) {
+      return post.comments.map(c => ({
+        id: c.id,
+        img: CHARACTER_PROFILES[c.id]?.img,
+        text: c.text,
+        time: Math.floor(Math.random() * 50) + 1
+      }));
+    }
+    const others = Object.keys(CHARACTER_PROFILES).filter(id => id !== charId && id !== 'pearl_diary');
     const count = 3 + Math.floor(Math.random() * 3); // 3~5
     const picked = shuffle(others).slice(0, Math.min(count, others.length));
     return picked.map(id => {
@@ -3254,6 +3556,630 @@
       ta.focus();
     });
   });
+
+  // ── Phase 2: /api/princesses 동기화 ──
+  // Next.js 하위 /app 라우트에서 서빙될 때만 동작. 정적 file:// 환경에서는 fetch 실패 → 무시.
+  (async function syncPrincessesFromDB() {
+    try {
+      // 절대 경로로 호출 (index.html이 /app/ 하위에서 서빙되어도 /api/...로 정상 도달)
+      const res = await fetch('/api/princesses', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const json = await res.json();
+      if (!json?.ok || !Array.isArray(json.princesses)) return;
+      let touched = 0;
+      for (const p of json.princesses) {
+        const id = p.id;
+        // 1) MODERATION 덮어쓰기
+        if (typeof MODERATION !== 'undefined' && MODERATION[id] && p.moderation) {
+          Object.assign(MODERATION[id], {
+            topics: p.moderation.topics || MODERATION[id].topics,
+            warningLine: p.moderation.warningLine || MODERATION[id].warningLine,
+            modalText: p.moderation.modalText || MODERATION[id].modalText,
+            yesReply: p.moderation.yesReply || MODERATION[id].yesReply,
+            noNotice: p.moderation.noNotice || MODERATION[id].noNotice,
+            muteMs: typeof p.moderation.muteMs === 'number' ? p.moderation.muteMs : MODERATION[id].muteMs
+          });
+          touched++;
+        }
+        // 2) CHARACTERS systemPrompt 보강 (서버 데이터를 systemPrompt 뒤에 한 줄 추가)
+        if (typeof CHARACTERS !== 'undefined' && Array.isArray(CHARACTERS)) {
+          const c = CHARACTERS.find(x => x.id === id);
+          if (c && p.speakingStyle && c.systemPrompt && !c._dbAugmented) {
+            const extra = `\n[DB 보강] MBTI: ${p.mbti || ''} / 대표 한마디: ${p.representative?.quote || ''} / 자주쓰는 표현 예: ${(p.frequentPhrases || []).slice(0,3).join(' · ')}`;
+            c.systemPrompt += extra;
+            c._dbAugmented = true;
+          }
+        }
+      }
+      console.log('[princessgram] synced from /api/princesses, touched=', touched);
+      window.__PRINCESSGRAM_DB_SYNCED__ = true;
+    } catch (e) {
+      // 정적 서빙(file://, GitHub Pages 등)에서는 정상적으로 실패 — 무시
+      console.log('[princessgram] /api/princesses unavailable, using local defaults');
+    }
+  })();
+
+  // 현재 로그인된 사용자 닉네임을 헤더에 적용 (Next.js /app 환경)
+  (async function syncCurrentUser() {
+    try {
+      const res = await fetch('/api/me', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const json = await res.json();
+      const u = json?.user;
+      if (!u) return;
+      const headerName = document.getElementById('igProfileUsername');
+      if (headerName && u.profile?.username) headerName.textContent = u.profile.username;
+      window.__PRINCESSGRAM_USER__ = u;
+    } catch {}
+  })();
+
+  // ── Phase 2: 친밀도 이벤트 핑 ──
+  // 사용자 액션마다 /api/intimacy/event 로 가벼운 핑.
+  // 로그인 안 됐거나 정적 환경이면 조용히 무시.
+  window.princessGramPing = async function(princessId, action, delta) {
+    if (!princessId || !action) return;
+    try {
+      await fetch('/api/intimacy/event', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ princessId, action, ...(typeof delta === 'number' ? { delta } : {}) })
+      });
+    } catch {}
+  };
+
+  // 좋아요·DM·댓글·답글·모더레이션 흐름에 자동 후킹
+  // 캐릭터 게시글 댓글 id 매핑: localKey "charId|idx" → 최신 dbCommentId
+  window.__charCommentMap = window.__charCommentMap || {};
+  (function hookIntimacy() {
+    // 1) 캐릭터 게시글 좋아요 — 친밀도 + DB 토글
+    if (typeof toggleCharPostLike === 'function') {
+      const orig = toggleCharPostLike;
+      window.toggleCharPostLike = function(btn, charId, idx) {
+        const wasLiked = btn.textContent === '❤️';
+        const r = orig.apply(this, arguments);
+        if (!wasLiked) window.princessGramPing(charId, 'like');
+        // DB toggle
+        fetch(`/api/char-posts/${encodeURIComponent(charId)}/${idx}/like`, {
+          method: 'POST',
+          credentials: 'same-origin'
+        }).catch(() => {});
+        return r;
+      };
+    }
+    // 2) DM 전송 (사용자→공주)
+    if (typeof sendUserDM === 'function') {
+      const orig = sendUserDM;
+      window.sendUserDM = async function() {
+        const target = (typeof _openDMCharId !== 'undefined') ? _openDMCharId : null;
+        const r = await orig.apply(this, arguments);
+        if (target) window.princessGramPing(target, 'dm_send');
+        return r;
+      };
+    }
+    // 3) 캐릭터 게시글에 사용자 댓글 — 친밀도 + DB
+    if (typeof submitCharPostComment === 'function') {
+      const orig = submitCharPostComment;
+      window.submitCharPostComment = async function(charId, idx) {
+        const safeKey = (charId+'-'+idx).replace(/[^a-zA-Z0-9_-]/g,'_');
+        const input = document.getElementById(`cpc_input_${safeKey}`);
+        const text = input ? input.value.trim() : '';
+        const r = await orig.apply(this, arguments);
+        window.princessGramPing(charId, 'comment');
+        if (text) {
+          try {
+            const res = await fetch(`/api/char-posts/${encodeURIComponent(charId)}/${idx}/comments`, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text })
+            });
+            if (res.ok) {
+              const j = await res.json();
+              if (j?.comment?.id) window.__charCommentMap[`${charId}|${idx}`] = j.comment.id;
+            }
+          } catch {}
+        }
+        return r;
+      };
+    }
+    // 4) 공주가 단 댓글에 사용자 답글
+    if (typeof submitReply === 'function') {
+      const orig = submitReply;
+      window.submitReply = function(postId, cid, charId) {
+        const r = orig.apply(this, arguments);
+        window.princessGramPing(charId, 'reply');
+        return r;
+      };
+    }
+    // 5) 모더레이션 모달 — 예/아니오
+    if (typeof showWarningDialog === 'function') {
+      const orig = showWarningDialog;
+      window.showWarningDialog = function(opts) {
+        const wrapped = {
+          ...opts,
+          onYes: () => {
+            if (opts?.char?.id) window.princessGramPing(opts.char.id, 'moderation_yes');
+            opts?.onYes && opts.onYes();
+          },
+          onNo: () => {
+            if (opts?.char?.id) window.princessGramPing(opts.char.id, 'moderation_no');
+            opts?.onNo && opts.onNo();
+          }
+        };
+        return orig(wrapped);
+      };
+    }
+    // 6) 부적절 발언 감지 시
+    if (typeof triggerModeration === 'function') {
+      const orig = triggerModeration;
+      window.triggerModeration = function(charId, topic, surface, ctx) {
+        window.princessGramPing(charId, 'inappropriate');
+        return orig(charId, topic, surface, ctx);
+      };
+    }
+    console.log('[princessgram] intimacy hooks installed');
+  })();
+
+  // ── Phase 4.2: 이미지 업로드 헬퍼 (클라 리사이즈 → /api/upload) ──
+  window.PrincessUpload = (function() {
+    async function fileToResizedDataUrl(file, maxSide, quality) {
+      maxSide = maxSide || 1024;
+      quality = quality || 0.8;
+      const bitmap = await createImageBitmap(file);
+      let w = bitmap.width, h = bitmap.height;
+      if (Math.max(w, h) > maxSide) {
+        const r = maxSide / Math.max(w, h);
+        w = Math.round(w * r); h = Math.round(h * r);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      return canvas.toDataURL('image/jpeg', quality);
+    }
+    async function uploadFile(file) {
+      try {
+        const dataUrl = await fileToResizedDataUrl(file, 1024, 0.8);
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl })
+        });
+        if (!res.ok) return null;
+        const j = await res.json();
+        return j.url || null;
+      } catch (e) {
+        console.warn('[upload] failed', e);
+        return null;
+      }
+    }
+    return { fileToResizedDataUrl, uploadFile };
+  })();
+
+  // ── Phase 5.3: persona summary 자동 생성 ──
+  // 일정 주기(현재 일기 5편마다)로 사용자 일기들을 요약해 메모리에 저장.
+  // 사용자 OpenAI 키를 그대로 사용 (옵션 A). 키 없으면 패스.
+  window.maybeGeneratePersonaSummary = async function() {
+    try {
+      const key = (localStorage.getItem('openai_api_key') || '').trim();
+      if (!key || !key.startsWith('sk-')) return;
+
+      const lastAt = parseInt(localStorage.getItem('persona_summary_last') || '0', 10);
+      // 최소 6시간 간격
+      if (Date.now() - lastAt < 6 * 60 * 60_000) return;
+
+      // 내 게시글 가져오기
+      const res = await fetch('/api/posts?limit=20', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const j = await res.json();
+      const posts = (j.posts || []);
+      if (posts.length < 5) return;          // 일기 5편 미만이면 스킵
+
+      const sampleText = posts.slice(0, 15)
+        .map(p => `- ${p.text.slice(0, 240)}`)
+        .join('\n');
+
+      const sys = '너는 사용자의 일기들을 읽고 그 사람의 성향·관심사·말투를 간결한 한국어로 요약하는 분석가야. 출력은 자유 문장 6줄 이하. 따옴표나 마크다운 없음.';
+      const usr = `다음은 같은 사용자가 최근에 쓴 일기 ${posts.length}편이야:\n${sampleText}\n\n위 일기들에서 보이는 사용자의 성향·자주 다루는 주제·기분 패턴·말투·관심사를 6줄 이내로 요약해줘. 미래의 AI 친구가 이 사람을 더 잘 이해할 수 있게.`;
+
+      // OpenAI chat (사용자 키)
+      const cres = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }],
+          temperature: 0.4,
+          max_tokens: 240
+        })
+      });
+      if (!cres.ok) return;
+      const cd = await cres.json();
+      const summary = (cd.choices?.[0]?.message?.content || '').trim();
+      if (!summary || summary.length < 20) return;
+
+      // 메모리에 저장 (princessId 없음 = 공통)
+      await window.PrincessMemory.save({ kind: 'persona_summary', text: summary, meta: { source_count: posts.length } });
+      localStorage.setItem('persona_summary_last', String(Date.now()));
+      console.log('[princessgram] persona summary saved');
+    } catch (e) {
+      console.warn('[princessgram] persona summary failed', e);
+    }
+  };
+  // 페이지 로드 후 살짝 지연시켜 실행
+  setTimeout(() => { try { window.maybeGeneratePersonaSummary(); } catch {} }, 8000);
+
+  // ── Phase 3: pgvector 메모리 (옵션 A — 사용자 본인 OpenAI 키 사용) ──
+  window.PrincessMemory = (function() {
+    async function getOpenAIKey() {
+      return (localStorage.getItem('openai_api_key') || '').trim();
+    }
+    async function embed(text) {
+      const key = await getOpenAIKey();
+      if (!key || !key.startsWith('sk-')) return null;
+      try {
+        const res = await fetch('https://api.openai.com/v1/embeddings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+          body: JSON.stringify({ model: 'text-embedding-3-small', input: text.slice(0, 8000) })
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data?.data?.[0]?.embedding || null;
+      } catch {
+        return null;
+      }
+    }
+    async function save({ princessId, kind, text, meta }) {
+      if (!text || !text.trim()) return null;
+      const embedding = await embed(text);
+      if (!embedding) return null;
+      try {
+        const res = await fetch('/api/memory/save', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ princessId: princessId || null, kind, text: text.slice(0, 8000), embedding, meta: meta || {} })
+        });
+        return res.ok ? (await res.json()).id : null;
+      } catch {
+        return null;
+      }
+    }
+    async function search({ princessId, kind, text, limit }) {
+      if (!text || !text.trim()) return [];
+      const embedding = await embed(text);
+      if (!embedding) return [];
+      try {
+        const res = await fetch('/api/memory/search', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...(princessId ? { princessId } : {}),
+            ...(kind ? { kind } : {}),
+            embedding,
+            limit: limit || 5
+          })
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.hits || [];
+      } catch {
+        return [];
+      }
+    }
+    function snippetsToPromptBlock(hits) {
+      if (!hits || !hits.length) return '';
+      const lines = hits.slice(0, 5).map((h, i) => {
+        const who = h.princessId ? `(${h.princessId})` : '(공통)';
+        return `${i + 1}. ${who} ${h.kind}: ${h.text.slice(0, 240)}`;
+      });
+      return `\n[관련 기억 — 사용자의 과거 일기/대화에서 가장 관련 있는 항목. 자연스럽게 반영만 하고 직접 인용 금지]\n${lines.join('\n')}`;
+    }
+    return { embed, save, search, snippetsToPromptBlock };
+  })();
+
+  // 친밀도 캐시 (페이지당 1회 fetch, 5분 TTL)
+  window.__intimacyCache = { at: 0, byPrincess: {} };
+  async function getIntimacyMap() {
+    const now = Date.now();
+    if (now - window.__intimacyCache.at < 5 * 60_000) return window.__intimacyCache.byPrincess;
+    try {
+      const res = await fetch('/api/intimacy/me', { credentials: 'same-origin' });
+      if (!res.ok) return {};
+      const j = await res.json();
+      const map = {};
+      for (const r of (j.relations || [])) map[r.princessId] = r.intimacy;
+      window.__intimacyCache = { at: now, byPrincess: map };
+      return map;
+    } catch { return {}; }
+  }
+  function intimacyToneLine(score) {
+    if (score <= 0) return null;
+    if (score < 20) return '[친밀도] 안면을 텄지만 아직 조심스러운 사이. 살짝만 더 자연스럽게.';
+    if (score < 50) return '[친밀도] 친구. 평소 톤 그대로 친근하게.';
+    if (score < 100) return '[친밀도] 친한 친구. 장난과 농담을 조금 더 섞고, 사적인 이야기도 살짝 꺼낼 만한 사이.';
+    if (score < 200) return '[친밀도] 베프. 매우 편하게, 줄임말과 본심을 자유롭게. 이전 대화를 기억하는 느낌으로.';
+    return '[친밀도] 절친. 가장 가까운 친구처럼. 짧고 솔직하게, 거의 가족 같은 톤.';
+  }
+
+  // aiChat을 패치 — 메모리 검색 + 친밀도 톤 라인 주입
+  (function patchAiChatWithMemoryAndIntimacy() {
+    if (typeof aiChat !== 'function') return;
+    const orig = aiChat;
+    window.aiChat = async function(opts) {
+      try {
+        const userText = (opts && opts.user) ? String(opts.user) : '';
+        const sys = (opts && opts.system) ? String(opts.system) : '';
+        let pid = null;
+        const m = sys.match(/'(ruby_|lily_princess|sora_diary|momo__o|pearl_diary)'/);
+        if (m) pid = m[1];
+
+        // 1) 친밀도 톤
+        if (pid) {
+          const map = await getIntimacyMap();
+          const tone = intimacyToneLine(map[pid] || 0);
+          if (tone) opts = { ...opts, system: (opts.system || '') + '\n' + tone };
+        }
+        // 2) 메모리 회상
+        if (userText && userText.length > 4) {
+          const hits = await window.PrincessMemory.search({ princessId: pid, text: userText.slice(0, 1000), limit: 4 });
+          if (hits && hits.length) {
+            opts = { ...opts, system: (opts.system || '') + window.PrincessMemory.snippetsToPromptBlock(hits) };
+          }
+        }
+      } catch {}
+      return orig(opts);
+    };
+    console.log('[princessgram] aiChat patched with memory + intimacy tone');
+  })();
+
+  // localPostId → dbPostId 매핑 (백필된 글이나 갓 만든 글이나 같은 매핑 테이블)
+  window.__postIdMap = window.__postIdMap || {};
+
+  // 일기 발행 시: 메모리 저장 + DB write-through (매핑 기록)
+  (function hookDiarySave() {
+    if (typeof publishPost !== 'function') return;
+    const orig = publishPost;
+    window.publishPost = async function() {
+      const ta = document.getElementById('diaryInput');
+      const text = ta ? ta.value.trim() : '';
+      const img = (typeof pendingPostImage !== 'undefined') ? pendingPostImage : null;
+      const beforeCount = (typeof postCount !== 'undefined') ? postCount : 0;
+      const r = await orig.apply(this, arguments);
+      const localPostId = 'post_' + (typeof postCount !== 'undefined' ? postCount : (beforeCount + 1));
+      if (text) {
+        window.PrincessMemory.save({ kind: 'diary', text });
+        try {
+          // 이미지는 데이터 URL이거나 http URL일 수 있음. http면 그대로, 데이터URL이면 길이 제한 (~2MB Postgres TEXT 안전)
+          let imageUrl = null;
+          if (img && typeof img === 'string') {
+            if (img.startsWith('http')) imageUrl = img;
+            else if (img.startsWith('data:image') && img.length < 2_000_000) imageUrl = img;
+          }
+          const res = await fetch('/api/posts', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, imageUrl })
+          });
+          if (res.ok) {
+            const j = await res.json();
+            if (j?.post?.id) {
+              window.__postIdMap[localPostId] = j.post.id;
+              window.__lastDbPostId = j.post.id;
+            }
+          }
+        } catch {}
+      }
+      return r;
+    };
+  })();
+
+  // 공주 자동 댓글도 DB로 저장: addComment 후킹
+  (function hookPrincessAutoComment() {
+    if (typeof addComment !== 'function') return;
+    const orig = addComment;
+    window.addComment = function(postId, char, text, elapsedSec) {
+      const r = orig.apply(this, arguments);
+      const dbPostId = window.__postIdMap[postId];
+      if (dbPostId && char && char.id && text) {
+        fetch(`/api/posts/${encodeURIComponent(dbPostId)}/comments`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ princessId: char.id, text })
+        }).catch(() => {});
+      }
+      return r;
+    };
+  })();
+
+  // DM 전송 시: 메모리 저장 + DB write-through
+  (function hookDmSave() {
+    if (typeof sendUserDM !== 'function') return;
+    const orig = sendUserDM;
+    window.sendUserDM = async function() {
+      const input = document.getElementById('dmInput');
+      const text = input ? input.value.trim() : '';
+      const target = (typeof _openDMCharId !== 'undefined') ? _openDMCharId : null;
+      const r = await orig.apply(this, arguments);
+      if (text && target) {
+        window.PrincessMemory.save({ kind: 'dm_user', text, princessId: target });
+        try {
+          await fetch(`/api/dm/${encodeURIComponent(target)}`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fromMe: true, text })
+          });
+        } catch {}
+      }
+      return r;
+    };
+  })();
+
+  // 내 일기에 사용자가 단 댓글도 DB로
+  (function hookMyPostComment() {
+    if (typeof submitMyPostComment !== 'function') return;
+    const orig = submitMyPostComment;
+    window.submitMyPostComment = function(postId) {
+      const inp = document.getElementById(`${postId}_userCommentInput`);
+      const text = inp ? inp.value.trim() : '';
+      const r = orig.apply(this, arguments);
+      const dbId = (window.__postIdMap && window.__postIdMap[postId]) || window.__lastDbPostId;
+      if (text && dbId) {
+        fetch(`/api/posts/${encodeURIComponent(dbId)}/comments`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, princessId: null })
+        }).catch(() => {});
+      }
+      return r;
+    };
+  })();
+
+  // ── Phase 4.1: 신규 기기 백필 (DB → 로컬 UI/스토리지) ──
+  // /app 환경에서만, 그리고 현재 피드가 비어있을 때만 동작.
+  (async function backfillFromServer() {
+    try {
+      const feed = document.getElementById('dynamicFeed');
+      if (!feed) return;
+      const hasLocalPosts = feed.querySelectorAll('.post-card').length > 0;
+      // 게시글 백필
+      if (!hasLocalPosts) {
+        const res = await fetch('/api/posts?limit=50', { credentials: 'same-origin' });
+        if (res.ok) {
+          const json = await res.json();
+          const posts = (json.posts || []).slice().reverse(); // 오래된 것부터 만들고 prepend
+          let count = 0;
+          for (const p of posts) {
+            count++;
+            const postId = 'post_' + (++postCount);
+            POST_TEXTS[postId] = p.text;
+            window.__postIdMap = window.__postIdMap || {};
+            window.__postIdMap[postId] = p.id;
+            const card = document.createElement('div');
+            card.className = 'post-card post-border';
+            card.id = postId;
+            const mediaHtml = p.imageUrl
+              ? `<img class="post-image" src="${p.imageUrl}" alt="">`
+              : '';
+            const created = new Date(p.createdAt).toLocaleString('ko-KR');
+            card.innerHTML = `
+              <div class="post-top">
+                <div class="post-avatar" data-me="1">${avatarHtml(myProfile)}</div>
+                <div class="post-info">
+                  <div class="post-username" data-me="1">${escHtml(myProfile.username)}</div>
+                  <div class="post-time">${created}</div>
+                </div>
+                <button class="post-menu-btn" onclick="togglePostMenu(event, '${postId}')">···</button>
+                <div class="post-menu" id="${postId}_menu">
+                  <button class="danger" onclick="deletePost('${postId}')">🗑 삭제</button>
+                </div>
+              </div>
+              <div class="post-content">${escHtml(p.text)}</div>
+              ${mediaHtml}
+              <div class="post-actions">
+                <button class="action-btn" onclick="toggleLike(this, '${postId}')">🤍</button>
+                <button class="action-btn" onclick="focusMyPostComment('${postId}')">💬</button>
+              </div>
+              <div class="likes-count" id="${postId}_likes">좋아요 0개</div>
+              <div class="comments" id="${postId}_comments"></div>
+              <div style="display:flex;gap:8px;padding:10px 16px;border-top:1px solid #f3e3ec;align-items:center;">
+                <div class="comment-avatar" style="width:28px;height:28px;">${avatarHtml(myProfile)}</div>
+                <input type="text" id="${postId}_userCommentInput"
+                  placeholder="댓글 달기..."
+                  onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)submitMyPostComment('${postId}')"
+                  style="flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#333;">
+                <button onclick="submitMyPostComment('${postId}')"
+                  style="background:none;border:none;color:#ec4899;font-weight:700;font-size:13px;cursor:pointer;">게시</button>
+              </div>
+            `;
+            feed.insertBefore(card, feed.firstChild);
+            // 댓글 백필
+            const cmtBox = card.querySelector('.comments');
+            for (const c of (p.comments || [])) {
+              const cid = `cmt_${++_commentSeq}`;
+              const el = document.createElement('div');
+              el.className = 'comment';
+              el.id = cid;
+              const nameHtml = c.princessId ? c.princessId : escHtml(myProfile.username);
+              const charObj = c.princessId && typeof CHARACTERS !== 'undefined'
+                ? CHARACTERS.find(x => x.id === c.princessId) : null;
+              const avatarBlock = charObj
+                ? `<div class="comment-avatar"><img src="${charObj.img}" alt="${c.princessId}"></div>`
+                : `<div class="comment-avatar">${avatarHtml(myProfile)}</div>`;
+              el.innerHTML = `
+                ${avatarBlock}
+                <div class="comment-body">
+                  <span class="comment-name">${nameHtml} </span>
+                  <span class="comment-text">${escHtml(c.text)}</span>
+                  <div class="comment-time">${new Date(c.createdAt).toLocaleString('ko-KR')}<span class="comment-delete" onclick="removeClosestComment(this)">삭제</span></div>
+                </div>
+              `;
+              cmtBox.appendChild(el);
+            }
+          }
+          if (count > 0) {
+            const hint = document.getElementById('emptyHint');
+            if (hint) hint.style.display = 'none';
+            persistState();
+            console.log('[princessgram] backfilled', count, 'posts from DB');
+          }
+        }
+      }
+      // DM 백필
+      if (typeof DM_THREADS !== 'undefined' && Object.keys(DM_THREADS).length === 0) {
+        const tres = await fetch('/api/dm', { credentials: 'same-origin' });
+        if (tres.ok) {
+          const tjson = await tres.json();
+          for (const t of (tjson.threads || [])) {
+            const mres = await fetch(`/api/dm/${encodeURIComponent(t.princessId)}`, { credentials: 'same-origin' });
+            if (!mres.ok) continue;
+            const mjson = await mres.json();
+            DM_THREADS[t.princessId] = {
+              messages: (mjson.messages || []).map(m => ({
+                from: m.fromMe ? 'me' : 'them',
+                text: m.text,
+                ts: new Date(m.createdAt).getTime()
+              })),
+              unread: t.unread || 0
+            };
+          }
+          if (Object.keys(DM_THREADS).length > 0) {
+            try { renderDMList(); updateDMBadge(); persistState(); } catch {}
+            console.log('[princessgram] backfilled', Object.keys(DM_THREADS).length, 'DM threads');
+          }
+        }
+      }
+    } catch (e) {
+      // 비로그인/정적 환경에서는 조용히 패스
+    }
+  })();
+
+  // Phase 2: 상단에 친밀도 뱃지 1개 (가장 친한 공주) — Next.js /app 환경 한정
+  (async function showIntimacyBadge() {
+    try {
+      const res = await fetch('/api/intimacy/me', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const json = await res.json();
+      const top = (json.relations || []).filter(r => r.intimacy > 0).sort((a,b)=>b.intimacy-a.intimacy)[0];
+      if (!top) return;
+      const header = document.querySelector('.header-logo');
+      if (!header) return;
+      const badge = document.createElement('a');
+      badge.href = '/settings/intimacy';
+      badge.textContent = `💗 ${top.princessId.replace(/_$/,'').replace('_princess','').replace('_diary','')} ${top.intimacy}`;
+      badge.style.cssText = 'position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:11px;background:#fbcfe8;color:#9d174d;padding:4px 10px;border-radius:999px;text-decoration:none;font-weight:600;';
+      header.style.position = 'relative';
+      header.appendChild(badge);
+    } catch {}
+  })();
 </script>
 </body>
 </html>

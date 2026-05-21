@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: princessgram-pg
+    environment:
+      POSTGRES_USER: princess
+      POSTGRES_PASSWORD: princess
+      POSTGRES_DB: princessgram
+    ports:
+      - "5432:5432"
+    volumes:
+      - princess_pg:/var/lib/postgresql/data
+volumes:
+  princess_pg:

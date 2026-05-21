@@ -1,2 +1,16 @@
 .DS_Store
 **/.DS_Store
+
+# Next.js / Node
+next/node_modules/
+next/.next/
+next/.env
+next/.env.local
+next/.env*.local
+next/public/legacy/
+
+# 큰 첨부 파일
+*.pdf
+
+# logs
+*.log

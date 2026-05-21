@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body { height: 100%; }
+  body {
+    @apply bg-gradient-to-b from-pink-50 to-white text-gray-900 antialiased;
+  }
+  input, button, select, textarea {
+    @apply outline-none;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-pink-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center rounded-xl border border-pink-200 px-4 py-2.5 text-sm font-medium text-pink-700 hover:bg-pink-50 transition-colors;
+  }
+  .field-input {
+    @apply w-full rounded-xl border border-pink-100 bg-white px-3.5 py-2.5 text-sm focus:border-pink-400 focus:ring-2 focus:ring-pink-200;
+  }
+  .field-label {
+    @apply mb-1.5 block text-xs font-semibold text-pink-900/80;
+  }
+  .field-error {
+    @apply mt-1 text-xs text-rose-500;
+  }
+  .card {
+    @apply rounded-2xl bg-white shadow-[0_8px_24px_-12px_rgba(236,72,153,0.25)] ring-1 ring-pink-100/60;
+  }
+  .interest-chip {
+    @apply cursor-pointer rounded-full border border-pink-200 bg-white px-3 py-1.5 text-xs font-medium text-pink-700 transition-colors;
+  }
+  .interest-chip[data-checked="true"] {
+    @apply bg-pink-500 text-white border-pink-500;
+  }
+}
