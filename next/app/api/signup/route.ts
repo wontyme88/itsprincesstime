@@ -6,6 +6,21 @@ import { generateOtp, hashOtp } from "@/lib/otp";
 import { sendVerificationEmail } from "@/lib/email";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
+const IP_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function makeIpCode() {
+  const block = () =>
+    Array.from({ length: 4 }, () => IP_CODE_CHARS[Math.floor(Math.random() * IP_CODE_CHARS.length)]).join("");
+  return `PRC-${block()}-${block()}`;
+}
+async function generateUniqueIpCode() {
+  for (let i = 0; i < 5; i++) {
+    const candidate = makeIpCode();
+    const dup = await prisma.userProfile.findUnique({ where: { ipCode: candidate } });
+    if (!dup) return candidate;
+  }
+  return makeIpCode();
+}
+
 export async function POST(req: Request) {
   const ip = clientIp(req);
   const rl = rateLimit(`signup:${ip}`, 5, 60_000);
@@ -49,6 +64,8 @@ export async function POST(req: Request) {
 
   const passwordHash = await bcrypt.hash(data.password, 12);
 
+  const ipCode = await generateUniqueIpCode();
+
   const user = await prisma.user.create({
     data: {
       email,
@@ -59,6 +76,9 @@ export async function POST(req: Request) {
           username,
           princessName: data.princessName,
           birthDate: data.birthDate ? new Date(data.birthDate) : null,
+          birthTime: data.birthTime ?? null,
+          mbti: data.mbti ?? null,
+          ipCode,
           interests: data.interests,
           agreedTos: data.agreedTos,
           agreedPrivacy: data.agreedPrivacy

@@ -1171,8 +1171,11 @@
             <div class="dm-chat-status">활동 중</div>
           </div>
         </div>
-        <div class="dm-chat-actions">
-          <span title="정보" aria-label="정보">ⓘ</span>
+        <div class="dm-chat-actions" style="position:relative;">
+          <span title="메뉴" aria-label="메뉴" onclick="toggleDMMenu(event)">⋯</span>
+          <div class="dm-chat-menu" id="dmChatMenu" style="display:none;position:absolute;top:28px;right:0;background:#fff;border:1px solid #f3e3ec;border-radius:8px;box-shadow:0 4px 12px rgba(236,72,153,0.18);min-width:120px;z-index:50;overflow:hidden;">
+            <button onclick="leaveDMRoom()" style="display:block;width:100%;padding:10px 14px;background:none;border:none;text-align:left;font-size:13px;color:#dc2626;cursor:pointer;">나가기</button>
+          </div>
         </div>
       </div>
       <div class="dm-messages" id="dmMessages"></div>
@@ -1190,6 +1193,12 @@
   <div class="profile-page profile-view" id="profilePage">
     <div class="ig-profile-topbar">
       <span class="ig-profile-username" id="igProfileUsername">princess_chae</span>
+      <div style="position:relative;">
+        <span class="ig-profile-settings" onclick="toggleProfileMenu(event)" title="더보기" aria-label="더보기">⋯</span>
+        <div class="profile-menu" id="profileMenu" style="display:none;position:absolute;top:28px;right:0;background:#fff;border:1px solid #f3e3ec;border-radius:8px;box-shadow:0 4px 12px rgba(236,72,153,0.18);min-width:140px;z-index:50;overflow:hidden;">
+          <button onclick="logoutUser()" style="display:block;width:100%;padding:10px 14px;background:none;border:none;text-align:left;font-size:13px;color:#dc2626;cursor:pointer;">로그아웃하기</button>
+        </div>
+      </div>
     </div>
     <div class="ig-profile-head">
       <div class="ig-profile-avatar" id="igProfileAvatar">👸</div>
@@ -1866,6 +1875,41 @@
     showToast('대화가 삭제됐어요 🌸');
   }
 
+  // 채팅방 헤더 ⋯ 메뉴
+  function toggleDMMenu(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('dmChatMenu');
+    if (!menu) return;
+    const open = menu.style.display === 'block';
+    menu.style.display = open ? 'none' : 'block';
+    if (!open) {
+      setTimeout(() => {
+        document.addEventListener('click', _closeDMMenuOnce, { once: true });
+      }, 0);
+    }
+  }
+  function _closeDMMenuOnce() {
+    const menu = document.getElementById('dmChatMenu');
+    if (menu) menu.style.display = 'none';
+  }
+  function leaveDMRoom() {
+    if (!_openDMCharId) return;
+    const menu = document.getElementById('dmChatMenu');
+    if (menu) menu.style.display = 'none';
+    if (!confirm('대화방을 나가면 대화방안의 모든 채팅 기록이 삭제됩니다.')) return;
+    const charId = _openDMCharId;
+    fetch(`/api/dm/${encodeURIComponent(charId)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin'
+    }).catch(() => {});
+    delete DM_THREADS[charId];
+    closeDMChat();
+    renderDMList();
+    updateDMBadge();
+    persistState();
+    showToast('대화방을 나갔어요 🌸');
+  }
+
   function relativeTime(ts) {
     const d = Math.floor((Date.now() - ts) / 1000);
     if (d < 60) return '방금';
@@ -2087,9 +2131,9 @@
     },
     pearl_diary: {
       topics: ['hate','violence','harassment','selfharm','manipulation'],
-      warningLine: '그런 방식의 대화는 품위 없군.',
+      warningLine: '그런 방식의 대화는 품위가 없어보이는군.',
       modalText: '공주님들과의 대화 규칙에 어긋나는 표현입니다. 다른 주제로 전환하시겠습니까?',
-      yesReply: '좋아. 그렇다면 대화를 이어가지.',
+      yesReply: '좋아. 그렇다면 다른 주제로 대화를 이어가자.',
       noNotice: 'pearl_diary님과의 상호작용이 일시 제한되었습니다 🦢',
       muteMs: 15 * 60 * 1000
     },
@@ -2899,6 +2943,46 @@
     document.getElementById('profilePage').classList.add('open');
     renderProfileView();
   }
+
+  // 프로필 ⋯ 메뉴 + 로그아웃
+  function toggleProfileMenu(e) {
+    if (e) e.stopPropagation();
+    const menu = document.getElementById('profileMenu');
+    if (!menu) return;
+    const open = menu.style.display === 'block';
+    menu.style.display = open ? 'none' : 'block';
+    if (!open) {
+      setTimeout(() => {
+        document.addEventListener('click', _closeProfileMenuOnce, { once: true });
+      }, 0);
+    }
+  }
+  function _closeProfileMenuOnce() {
+    const menu = document.getElementById('profileMenu');
+    if (menu) menu.style.display = 'none';
+  }
+  async function logoutUser() {
+    const menu = document.getElementById('profileMenu');
+    if (menu) menu.style.display = 'none';
+    if (!confirm('로그아웃 할까요? 게시물·DM 등 모든 기록은 그대로 보관돼요.')) return;
+    try {
+      const csrfRes = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
+      const { csrfToken } = await csrfRes.json();
+      await fetch('/api/auth/signout', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ csrfToken, callbackUrl: '/login' })
+      });
+    } catch (e) { console.warn('[auth] signout request failed', e); }
+    // 다른 사용자가 같은 브라우저로 로그인할 때 옛 캐시가 보이지 않도록 클리어
+    try {
+      localStorage.removeItem('princess_profile');
+      localStorage.removeItem('princessgram_state_v1');
+      localStorage.removeItem('persona_summary_last');
+    } catch (e) {}
+    window.location.href = '/login';
+  }
   function goProfileEdit() {
     hideAllPages();
     document.getElementById('profileEditPage').classList.add('open');
@@ -2943,19 +3027,19 @@
         { emoji: '❤️', image: 'assets/ruby_/ruby_a/ruby_a1.png',
           caption: '오늘 텐션 미쳤다 진짜ㅋㅋ💎 친구들아 봐줘 봐줘!! 오늘의 셀카📸✨',
           comments: [
-            { id: 'momo__o', text: '텐션 좋다ㅋㅋ🍑 끝나고 야식 콜?? 떡볶이 어때' },
+            { id: 'momo__o', text: '너무 예뻐🍑 인생샷 업로드 기념 야식 콜?? 떡볶이 어때' },
             { id: 'lily_princess', text: '공주 표정이 햇살 같아☀️ 보는 나도 기분 좋아져🌼' },
             { id: 'sora_diary', text: '오늘 메이크업 분위기 진짜 예쁘다… 립 컬러 알려줘☁️' }
           ] },
         { emoji: '👗', image: 'assets/ruby_/ruby_b/ruby_b2.png',
           caption: '드레스 입은 김에 파티 한 번 가야 하는 거 아니야??💎 같이 갈 사람 손!!✨',
           comments: [
-            { id: 'momo__o', text: '파티 가면 무조건 디저트 코스 같이 가자🍑 내가 맛집 알아둠ㅋㅋ' },
+            { id: 'momo__o', text: '파티 가면 무조건 디저트 싹쓸이 해야지🍑 ㅋㅋ' },
             { id: 'lily_princess', text: '드레스 너무 예뻐… 봄꽃 같아🌷' },
             { id: 'sora_diary', text: '공주 분위기 미쳤어 진짜☁️ 헤어도 잘 어울려' }
           ] },
         { emoji: '📖', image: 'assets/ruby_/ruby_c/ruby_c1.png',
-          images: ['assets/ruby_/ruby_c/ruby_c1.png', 'assets/ruby_/ruby_c/ruby_c2.png'],
+          images: ['assets/ruby_/ruby_e/ruby_e1.png'],
           caption: '오늘은 책 읽는 척ㅋㅋ📖 사실 친구들한테 보낼 사진 찍는 중이었음💎 우정 영원해!!',
           comments: [
             { id: 'momo__o', text: 'ㅋㅋㅋ책 읽는 척 너무 티 남🍑 차 한 잔 같이 시킬 걸' },
@@ -2997,7 +3081,7 @@
           ] },
         { emoji: '✨', image: 'assets/ruby_/ruby_h/ruby_h1.png',
           images: ['assets/ruby_/ruby_h/ruby_h1.png', 'assets/ruby_/ruby_h/ruby_h2.png'],
-          caption: '오늘도 반짝반짝 마무리✨❤️ 너네 덕분에 매일이 파티 같아ㅋㅋ💎 우리 베프잖아 영원히!!',
+          caption: '오늘도 반짝반짝 마무리✨❤️ 너네 덕분에 매일이 파티 같아ㅋㅋ💎 우린 베프잖아 영원히!!',
           comments: [
             { id: 'momo__o', text: '베프지 당연ㅋㅋ🍑 내일 점심 같이 먹자' },
             { id: 'lily_princess', text: '공주 덕분에 하루가 환해져🌼 고마워' },
@@ -3390,23 +3474,46 @@
   }
 
   function loadProfile() {
+    // 초기 동기 로드: localStorage 캐시(있으면) 또는 빈 값. 직후 syncProfileFromServer()가 서버 값으로 덮어씀.
     try {
       const raw = localStorage.getItem('princess_profile');
       if (raw) return JSON.parse(raw);
     } catch (e) {}
-    const fresh = {
+    return {
       username: 'princess_chae',
       avatarDataUrl: null,
-      ipCode: genIpCode(),
+      ipCode: '',
       mbti: '',
       birthDate: '',
       birthTime: ''
     };
-    localStorage.setItem('princess_profile', JSON.stringify(fresh));
-    return fresh;
   }
 
-  function saveProfile() {
+  async function syncProfileFromServer() {
+    try {
+      const res = await fetch('/api/me', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const json = await res.json();
+      if (!json.ok || !json.user?.profile) return;
+      const p = json.user.profile;
+      myProfile = {
+        username: p.username || 'princess_chae',
+        avatarDataUrl: p.avatarUrl || null,
+        ipCode: p.ipCode || '',
+        mbti: p.mbti || '',
+        birthDate: p.birthDate ? new Date(p.birthDate).toISOString().slice(0, 10) : '',
+        birthTime: p.birthTime || ''
+      };
+      try { localStorage.setItem('princess_profile', JSON.stringify(myProfile)); } catch (e) {}
+      try { renderMyProfile && renderMyProfile(); } catch (e) {}
+      try { fillProfileForm && fillProfileForm(); } catch (e) {}
+    } catch (e) { console.warn('[profile] sync failed', e); }
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('DOMContentLoaded', () => { syncProfileFromServer(); });
+  }
+
+  async function saveProfile() {
     const username = document.getElementById('profileUsername').value.trim() || 'princess_chae';
     myProfile.username = username;
     myProfile.mbti = document.getElementById('profileMbti').value;
@@ -3416,7 +3523,26 @@
       myProfile.avatarDataUrl = pendingAvatar;
       pendingAvatar = undefined;
     }
-    localStorage.setItem('princess_profile', JSON.stringify(myProfile));
+    try { localStorage.setItem('princess_profile', JSON.stringify(myProfile)); } catch (e) {}
+    try {
+      const res = await fetch('/api/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          mbti: myProfile.mbti || undefined,
+          birthDate: myProfile.birthDate || undefined,
+          birthTime: myProfile.birthTime || undefined,
+          avatarUrl: myProfile.avatarDataUrl || undefined
+        })
+      });
+      if (!res.ok) {
+        showToast('서버 저장 실패 ❌');
+      }
+    } catch (e) {
+      console.warn('[profile] save failed', e);
+      showToast('서버 저장 실패 ❌');
+    }
     renderMyProfile();
     showToast('저장 완료 👑');
     goProfile();
@@ -4112,14 +4238,23 @@
               const charObj = c.princessId && typeof CHARACTERS !== 'undefined'
                 ? CHARACTERS.find(x => x.id === c.princessId) : null;
               const avatarBlock = charObj
-                ? `<div class="comment-avatar"><img src="${charObj.img}" alt="${c.princessId}"></div>`
+                ? `<div class="comment-avatar"><img src="${charObj.img}" alt="${c.princessId}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'${charObj.emoji}'}))"></div>`
                 : `<div class="comment-avatar">${avatarHtml(myProfile)}</div>`;
+              const replyBlock = charObj ? `
+                <button class="reply-btn" onclick="openReplyInput('${postId}','${cid}','${charObj.id}')">답글 달기</button>
+                <div class="reply-input-wrap" id="${cid}_replyWrap">
+                  <input type="text" id="${cid}_replyInput" placeholder="@${charObj.id} 에게 답글..." onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)submitReply('${postId}','${cid}','${charObj.id}')">
+                  <button onclick="submitReply('${postId}','${cid}','${charObj.id}')">등록</button>
+                </div>
+                <div class="replies" id="${cid}_replies"></div>
+              ` : '';
               el.innerHTML = `
                 ${avatarBlock}
                 <div class="comment-body">
                   <span class="comment-name">${nameHtml} </span>
                   <span class="comment-text">${escHtml(c.text)}</span>
                   <div class="comment-time">${new Date(c.createdAt).toLocaleString('ko-KR')}<span class="comment-delete" onclick="removeClosestComment(this)">삭제</span></div>
+                  ${replyBlock}
                 </div>
               `;
               cmtBox.appendChild(el);
@@ -4162,24 +4297,36 @@
     }
   })();
 
-  // Phase 2: 상단에 친밀도 뱃지 1개 (가장 친한 공주) — Next.js /app 환경 한정
-  (async function showIntimacyBadge() {
-    try {
-      const res = await fetch('/api/intimacy/me', { credentials: 'same-origin' });
-      if (!res.ok) return;
-      const json = await res.json();
-      const top = (json.relations || []).filter(r => r.intimacy > 0).sort((a,b)=>b.intimacy-a.intimacy)[0];
-      if (!top) return;
-      const header = document.querySelector('.header-logo');
-      if (!header) return;
-      const badge = document.createElement('a');
-      badge.href = '/settings/intimacy';
-      badge.textContent = `💗 ${top.princessId.replace(/_$/,'').replace('_princess','').replace('_diary','')} ${top.intimacy}`;
-      badge.style.cssText = 'position:absolute;right:14px;top:50%;transform:translateY(-50%);font-size:11px;background:#fbcfe8;color:#9d174d;padding:4px 10px;border-radius:999px;text-decoration:none;font-weight:600;';
-      header.style.position = 'relative';
-      header.appendChild(badge);
-    } catch {}
+  // ── 프로필 아바타 클릭 → 해당 프로필로 이동 (메신저/DM 화면 제외) ──
+  (function setupAvatarNavigation() {
+    document.addEventListener('click', (e) => {
+      const el = e.target.closest('.post-avatar, .comment-avatar');
+      if (!el) return;
+      // 메신저/DM 영역은 제외
+      if (el.closest('.dm-chat, .messenger-page')) return;
+      // 본인 아바타: data-me 또는 캐릭터 alt가 없음
+      const charImg = el.querySelector('img[alt]');
+      const altId = charImg?.getAttribute('alt') || '';
+      const isMine = el.dataset?.me === '1' ||
+        !(typeof CHARACTERS !== 'undefined' && CHARACTERS.some(c => c.id === altId));
+      e.stopPropagation();
+      if (isMine) {
+        if (typeof goProfile === 'function') goProfile();
+      } else {
+        if (typeof goCharacterProfile === 'function') goCharacterProfile(altId);
+      }
+    }, true);
+
+    // 클릭 가능한 아바타에 커서 표시 (CSS 한 줄 주입)
+    const style = document.createElement('style');
+    style.textContent = `
+      .post-avatar, .comment-avatar { cursor: pointer; }
+      .dm-chat .post-avatar, .dm-chat .comment-avatar,
+      .messenger-page .post-avatar, .messenger-page .comment-avatar { cursor: default; }
+    `;
+    document.head.appendChild(style);
   })();
+
 </script>
 </body>
 </html>

@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 
 export default async function LandingPage() {
   const session = await auth();
-  if (session?.user) redirect("/app");
+  if (session?.user) redirect("/app/");
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center px-6">

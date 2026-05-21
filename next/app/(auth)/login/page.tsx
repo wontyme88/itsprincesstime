@@ -8,7 +8,7 @@ import { signIn } from "next-auth/react";
 function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
-  const nextPath = search.get("next") || "/app";
+  const nextPath = search.get("next") || "/app/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);

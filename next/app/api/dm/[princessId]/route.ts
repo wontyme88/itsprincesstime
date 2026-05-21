@@ -47,6 +47,20 @@ export async function GET(
   });
 }
 
+export async function DELETE(
+  _req: Request,
+  { params }: { params: { princessId: string } }
+) {
+  const session = await auth();
+  const userId = (session?.user as { id?: string } | undefined)?.id;
+  if (!userId) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+
+  await prisma.directMessageThread.deleteMany({
+    where: { userId, princessId: params.princessId }
+  });
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(
   req: Request,
   { params }: { params: { princessId: string } }

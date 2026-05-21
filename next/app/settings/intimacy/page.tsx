@@ -42,7 +42,7 @@ export default async function IntimacyPage() {
   return (
     <main className="px-5 py-8">
       <div className="mb-4 flex items-center gap-2 text-xs text-pink-700">
-        <Link href="/app" className="hover:underline">← SNS로</Link>
+        <Link href="/feed" className="hover:underline">← 피드로</Link>
       </div>
       <h1 className="mb-1 text-2xl font-bold text-pink-700">공주별 친밀도</h1>
       <p className="mb-5 text-xs text-pink-900/60">

@@ -22,7 +22,7 @@ export default async function AdminPrincessesPage() {
     <main className="px-5 py-8">
       <div className="mb-5 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-pink-700">공주 관리</h1>
-        <Link href="/app" className="text-xs text-pink-600 hover:underline">/app으로 →</Link>
+        <Link href="/feed" className="text-xs text-pink-600 hover:underline">/feed으로 →</Link>
       </div>
       <div className="space-y-2">
         {list.map((p) => {

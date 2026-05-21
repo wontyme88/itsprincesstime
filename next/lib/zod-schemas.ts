@@ -11,6 +11,15 @@ export const INTERESTS = [
   "패션"
 ] as const;
 
+export const MBTI_TYPES = [
+  "INTJ", "INTP", "ENTJ", "ENTP",
+  "INFJ", "INFP", "ENFJ", "ENFP",
+  "ISTJ", "ISFJ", "ESTJ", "ESFJ",
+  "ISTP", "ISFP", "ESTP", "ESFP"
+] as const;
+
+const birthTimeRegex = /^([01]\d|2[0-3]):[0-5]\d$/;
+
 export const passwordSchema = z
   .string()
   .min(8, "비밀번호는 8자 이상이어야 해요")
@@ -24,7 +33,16 @@ export const signupSchema = z
     passwordConfirm: z.string(),
     name: z.string().min(2, "닉네임은 2자 이상이어야 해요").max(20),
     princessName: z.string().min(1, "공주 이름을 입력해주세요").max(20),
-    birthDate: z.string().optional(), // ISO date string
+    birthDate: z.string().min(1, "생년월일을 입력해주세요"), // ISO date string
+    birthTime: z
+      .string()
+      .regex(birthTimeRegex, "HH:MM 형식이어야 해요")
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
+    mbti: z
+      .enum(MBTI_TYPES)
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
     interests: z.array(z.enum(INTERESTS)).min(1, "관심사를 1개 이상 선택해주세요"),
     agreedTos: z.literal(true, { errorMap: () => ({ message: "이용약관에 동의해주세요" }) }),
     agreedPrivacy: z.literal(true, {
@@ -37,6 +55,27 @@ export const signupSchema = z
   });
 
 export type SignupInput = z.infer<typeof signupSchema>;
+
+export const profileUpdateSchema = z.object({
+  princessName: z.string().min(1).max(20).optional(),
+  birthDate: z
+    .string()
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  birthTime: z
+    .string()
+    .regex(birthTimeRegex, "HH:MM 형식이어야 해요")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  mbti: z
+    .enum(MBTI_TYPES)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  avatarUrl: z.string().optional(),
+  interests: z.array(z.enum(INTERESTS)).optional()
+});
+
+export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
 
 export const verifyEmailSchema = z.object({
   email: z.string().email(),

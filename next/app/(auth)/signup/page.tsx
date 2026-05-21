@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { signupSchema, type SignupInput, INTERESTS } from "@/lib/zod-schemas";
+import { signupSchema, type SignupInput, INTERESTS, MBTI_TYPES } from "@/lib/zod-schemas";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -101,8 +101,26 @@ export default function SignupPage() {
         </div>
 
         <div>
-          <label className="field-label">생년월일 (선택)</label>
+          <label className="field-label">생년월일</label>
           <input className="field-input" type="date" {...register("birthDate")} />
+          {errors.birthDate && <p className="field-error">{errors.birthDate.message}</p>}
+        </div>
+
+        <div>
+          <label className="field-label">태어난 시간 (선택)</label>
+          <input className="field-input" type="time" {...register("birthTime")} />
+          {errors.birthTime && <p className="field-error">{errors.birthTime.message}</p>}
+        </div>
+
+        <div>
+          <label className="field-label">MBTI (선택)</label>
+          <select className="field-input" {...register("mbti")} defaultValue="">
+            <option value="">선택하지 않음</option>
+            {MBTI_TYPES.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+          {errors.mbti && <p className="field-error">{errors.mbti.message as string}</p>}
         </div>
 
         <div>
