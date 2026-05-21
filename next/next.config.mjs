@@ -1,11 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  async redirects() {
-    return [
-      // /app → /app/  (trailing slash so relative URLs in legacy index.html resolve correctly)
-      { source: "/app", destination: "/app/", permanent: false }
-    ];
-  },
+  // 모든 라우트에 trailing slash 적용 (legacy HTML의 상대 URL 해석을 위해 /app/는 슬래시 유지)
+  trailingSlash: true,
+
   async rewrites() {
     return [
       { source: "/app/", destination: "/legacy/index.html" },
