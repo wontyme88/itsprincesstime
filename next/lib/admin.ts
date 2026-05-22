@@ -1,8 +1,9 @@
 /**
- * 어드민 가드: 환경변수 ADMIN_EMAILS (쉼표 구분) 에 포함된 사용자만 통과.
- * 예: ADMIN_EMAILS="dongsoonh@lannerinc.co.kr,admin@example.com"
+ * 어드민 가드: 고정된 단일 관리자 이메일만 통과.
  */
 import { auth } from "@/lib/auth";
+
+const ADMIN_EMAIL = "wontyme88@naver.com";
 
 export async function requireAdmin(): Promise<
   | { ok: true; userId: string; email: string }
@@ -13,16 +14,9 @@ export async function requireAdmin(): Promise<
   const userId = (session?.user as { id?: string } | undefined)?.id;
   if (!email || !userId) return { ok: false, status: 401 };
 
-  const allowed = (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-
-  if (allowed.length && !allowed.includes(email.toLowerCase())) {
+  if (email.toLowerCase() !== ADMIN_EMAIL) {
     return { ok: false, status: 403 };
   }
-  // ADMIN_EMAILS 미설정 시 모두 거부 (안전 기본값)
-  if (!allowed.length) return { ok: false, status: 403 };
 
   return { ok: true, userId, email };
 }

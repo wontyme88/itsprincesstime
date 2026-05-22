@@ -71,6 +71,7 @@ model UserProfile {
   birthTime     String?
   mbti          String?
   avatarUrl     String?   @db.Text
+  bio           String?   @db.Text
   ipCode        String?   @unique
   interests     String[]
   agreedTos     Boolean   @default(false)
@@ -118,10 +119,31 @@ model PasswordResetToken {
 
 // ───── 공주 시드 ─────
 model Princess {
-  id          String   @id
+  id          String         @id
   displayName String
+  avatarUrl   String?        @db.Text
+  bio         String?        @db.Text
   personality Json
-  createdAt   DateTime @default(now())
+  inviteCode  String?        @unique
+  isDefault   Boolean        @default(false)
+  themeColor  String?
+  createdAt   DateTime       @default(now())
+  posts       PrincessPost[]
+}
+
+model PrincessPost {
+  id         String   @id @default(cuid())
+  princessId String
+  imageUrl   String?  @db.Text
+  imageUrls  String[] @default([])
+  emoji      String?
+  text       String   @db.Text
+  comments   Json     @default("[]")
+  position   Int      @default(0)
+  createdAt  DateTime @default(now())
+  princess   Princess @relation(fields: [princessId], references: [id], onDelete: Cascade)
+
+  @@index([princessId, position])
 }
 
 // ───── 2단계 stub 모델 ─────

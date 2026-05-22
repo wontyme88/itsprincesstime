@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin";
+import { princessProfileUpdateSchema } from "@/lib/zod-schemas";
 
 /**
  * GET /api/princesses
@@ -48,12 +48,7 @@ export async function PUT(req: Request) {
   } catch {
     return NextResponse.json({ ok: false, error: "InvalidJson" }, { status: 400 });
   }
-  const parsed = z
-    .object({
-      displayName: z.string().min(1).max(40).optional(),
-      personality: z.record(z.any()).optional()
-    })
-    .safeParse(body);
+  const parsed = princessProfileUpdateSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: "Invalid" }, { status: 400 });
   }
@@ -69,6 +64,8 @@ export async function PUT(req: Request) {
     where: { id },
     data: {
       displayName: parsed.data.displayName ?? existing.displayName,
+      avatarUrl: parsed.data.avatarUrl === undefined ? existing.avatarUrl : parsed.data.avatarUrl,
+      bio: parsed.data.bio === undefined ? existing.bio : parsed.data.bio,
       personality: mergedPersonality as object
     }
   });
@@ -76,14 +73,25 @@ export async function PUT(req: Request) {
 }
 
 function shapeOne(
-  p: { id: string; displayName: string; personality: unknown },
+  p: { id: string; displayName: string; avatarUrl?: string | null; bio?: string | null; personality: unknown },
   fields: string[] | null
 ) {
   const personality = (p.personality ?? {}) as Record<string, unknown>;
   if (!fields) {
-    return { id: p.id, displayName: p.displayName, ...personality };
+    return {
+      id: p.id,
+      displayName: p.displayName,
+      avatarUrl: p.avatarUrl ?? null,
+      bio: p.bio ?? null,
+      ...personality
+    };
   }
-  const picked: Record<string, unknown> = { id: p.id, displayName: p.displayName };
+  const picked: Record<string, unknown> = {
+    id: p.id,
+    displayName: p.displayName,
+    avatarUrl: p.avatarUrl ?? null,
+    bio: p.bio ?? null
+  };
   for (const f of fields) {
     if (f in personality) picked[f] = personality[f];
   }

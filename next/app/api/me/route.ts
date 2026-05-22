@@ -10,6 +10,7 @@ const profileSelect = {
   birthTime: true,
   mbti: true,
   avatarUrl: true,
+  bio: true,
   ipCode: true,
   interests: true
 } as const;
@@ -56,20 +57,29 @@ export async function PATCH(req: Request) {
   }
   const data = parsed.data;
 
-  const profile = await prisma.userProfile.update({
-    where: { userId },
-    data: {
-      ...(data.princessName !== undefined && { princessName: data.princessName }),
-      ...(data.birthDate !== undefined && {
-        birthDate: data.birthDate ? new Date(data.birthDate) : null
-      }),
-      ...(data.birthTime !== undefined && { birthTime: data.birthTime ?? null }),
-      ...(data.mbti !== undefined && { mbti: data.mbti ?? null }),
-      ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl || null }),
-      ...(data.interests !== undefined && { interests: data.interests })
-    },
-    select: profileSelect
-  });
-
-  return NextResponse.json({ ok: true, profile });
+  try {
+    const profile = await prisma.userProfile.update({
+      where: { userId },
+      data: {
+        ...(data.username !== undefined && { username: data.username }),
+        ...(data.princessName !== undefined && { princessName: data.princessName }),
+        ...(data.birthDate !== undefined && {
+          birthDate: data.birthDate ? new Date(data.birthDate) : null
+        }),
+        ...(data.birthTime !== undefined && { birthTime: data.birthTime ?? null }),
+        ...(data.mbti !== undefined && { mbti: data.mbti ?? null }),
+        ...(data.avatarUrl !== undefined && { avatarUrl: data.avatarUrl || null }),
+        ...(data.bio !== undefined && { bio: data.bio || null }),
+        ...(data.interests !== undefined && { interests: data.interests })
+      },
+      select: profileSelect
+    });
+    return NextResponse.json({ ok: true, profile });
+  } catch (e) {
+    const code = (e as { code?: string } | null)?.code;
+    if (code === "P2002") {
+      return NextResponse.json({ ok: false, error: "UsernameTaken" }, { status: 409 });
+    }
+    throw e;
+  }
 }

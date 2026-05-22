@@ -4,6 +4,10 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
+export const runtime = "nodejs";
+export const maxDuration = 30;
+export const dynamic = "force-dynamic";
+
 /**
  * MVP 업로드: 클라이언트가 미리 리사이즈한 data URL을 직접 받아
  * UploadedFile 테이블에 보관 후 동일 data URL을 다시 돌려준다.
@@ -13,8 +17,8 @@ import { rateLimit, clientIp } from "@/lib/rate-limit";
 const schema = z.object({
   dataUrl: z
     .string()
-    .regex(/^data:image\/(png|jpeg|jpg|webp);base64,/i)
-    .max(2_500_000) // ~1.8MB 이미지 (base64 1.33x 팽창)
+    .regex(/^data:(image\/(png|jpeg|jpg|webp)|video\/(mp4|webm|quicktime));base64,/i)
+    .max(20_000_000)
 });
 
 export async function POST(req: Request) {
@@ -33,7 +37,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Invalid" }, { status: 400 });
   }
 
-  const mimeMatch = parsed.data.dataUrl.match(/^data:(image\/[a-z]+);base64,/i);
+  const mimeMatch = parsed.data.dataUrl.match(/^data:((?:image|video)\/[a-z0-9.+-]+);base64,/i);
   const contentType = mimeMatch?.[1] ?? "image/jpeg";
   const size = parsed.data.dataUrl.length;
 

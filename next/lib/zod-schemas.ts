@@ -43,7 +43,7 @@ export const signupSchema = z
       .enum(MBTI_TYPES)
       .optional()
       .or(z.literal("").transform(() => undefined)),
-    interests: z.array(z.enum(INTERESTS)).min(1, "관심사를 1개 이상 선택해주세요"),
+    interests: z.array(z.enum(INTERESTS)).default([]),
     agreedTos: z.literal(true, { errorMap: () => ({ message: "이용약관에 동의해주세요" }) }),
     agreedPrivacy: z.literal(true, {
       errorMap: () => ({ message: "개인정보 처리방침에 동의해주세요" })
@@ -57,7 +57,9 @@ export const signupSchema = z
 export type SignupInput = z.infer<typeof signupSchema>;
 
 export const profileUpdateSchema = z.object({
+  username: z.string().min(2).max(20).optional(),
   princessName: z.string().min(1).max(20).optional(),
+  bio: z.string().max(300).optional(),
   birthDate: z
     .string()
     .optional()
@@ -98,4 +100,36 @@ export const resetPasswordSchema = z.object({
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8)
+});
+
+// ───── 공주 프로필/게시글 ─────
+export const princessProfileUpdateSchema = z.object({
+  displayName: z.string().min(1).max(40).optional(),
+  avatarUrl: z.string().max(20_000_000).nullable().optional(),
+  bio: z.string().max(500).nullable().optional(),
+  personality: z.record(z.any()).optional()
+});
+
+const princessCommentSchema = z.object({
+  id: z.string().min(1).max(64),
+  text: z.string().min(1).max(500)
+});
+
+export const princessPostCreateSchema = z.object({
+  princessId: z.string().min(1).max(64),
+  imageUrl: z.string().max(20_000_000).nullable().optional(),
+  imageUrls: z.array(z.string().max(20_000_000)).max(10).optional(),
+  text: z.string().min(1).max(2200),
+  emoji: z.string().max(8).nullable().optional(),
+  comments: z.array(princessCommentSchema).max(20).optional(),
+  position: z.number().int().min(0).optional()
+});
+
+export const princessPostUpdateSchema = z.object({
+  imageUrl: z.string().max(20_000_000).nullable().optional(),
+  imageUrls: z.array(z.string().max(20_000_000)).max(10).optional(),
+  text: z.string().min(1).max(2200).optional(),
+  emoji: z.string().max(8).nullable().optional(),
+  comments: z.array(princessCommentSchema).max(20).optional(),
+  position: z.number().int().min(0).optional()
 });

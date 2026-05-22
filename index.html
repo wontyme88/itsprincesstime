@@ -48,7 +48,12 @@
       -webkit-overflow-scrolling: touch;
       overscroll-behavior: contain;
       box-shadow: 0 0 30px rgba(255,150,180,0.2);
+      scrollbar-width: none;
+      -ms-overflow-style: none;
     }
+    .app::-webkit-scrollbar { display: none; }
+    *::-webkit-scrollbar { display: none; }
+    * { scrollbar-width: none; -ms-overflow-style: none; }
 
     /* ── Header ── */
     .header {
@@ -213,6 +218,25 @@
     }
     .post-btn:hover { opacity: 0.85; }
     .post-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .comment-send-btn {
+      background: linear-gradient(135deg, #f9a8d4, #f472b6);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+      transition: transform 0.1s, opacity 0.2s;
+    }
+    .comment-send-btn:hover { opacity: 0.9; }
+    .comment-send-btn:active { transform: scale(0.9); }
+    .comment-send-btn svg { width: 14px; height: 14px; stroke: #fff; }
 
     /* ── Divider ── */
     .divider {
@@ -889,7 +913,7 @@
     .ig-stat { text-align: center; }
     .ig-stat-num { font-weight: 700; font-size: 17px; color: #222; }
     .ig-stat-label { font-size: 12px; color: #777; margin-top: 2px; }
-    .ig-profile-bio { padding: 4px 20px 10px; font-size: 13px; color: #333; line-height: 1.5; }
+    .ig-profile-bio { padding: 4px 20px 10px 29px; font-size: 13px; color: #333; line-height: 1.5; }
     .ig-profile-name { font-weight: 700; margin-bottom: 4px; }
     .ig-profile-ipcode { font-family: monospace; font-size: 12px; color: #c06090; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; letter-spacing: 0.5px; }
     .ig-profile-desc { font-size: 12px; color: #888; }
@@ -1043,6 +1067,85 @@
       .bottom-nav { max-width: 100%; left: 0; transform: none; }
       input, textarea, select, [contenteditable] { font-size: 16px; }
     }
+
+    /* ── Invite Code Modal ── */
+    .invite-modal-backdrop {
+      position: fixed; inset: 0; background: rgba(60,30,50,0.55);
+      backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center;
+      z-index: 4000; padding: 16px;
+    }
+    .invite-modal-backdrop.show { display: flex; }
+    .invite-modal {
+      width: 100%; max-width: 340px; background: linear-gradient(160deg, #fff, #fff4f9);
+      border-radius: 20px; padding: 22px 22px 18px; text-align: center;
+      box-shadow: 0 20px 60px rgba(236,72,153,0.25);
+    }
+    .invite-modal h3 { margin: 0 0 6px; font-size: 16px; color: #c0306a; font-weight: 700; }
+    .invite-modal p.sub { margin: 0 0 14px; font-size: 12px; color: #b07090; line-height: 1.5; }
+    .invite-modal input.code {
+      width: 100%; box-sizing: border-box; padding: 12px; font-family: ui-monospace, monospace;
+      font-size: 20px; letter-spacing: 6px; text-align: center; text-transform: uppercase;
+      border: 1.5px solid #f9a8d4; border-radius: 12px; outline: none; background: #fff;
+      color: #c0306a; font-weight: 700;
+    }
+    .invite-modal input.code:focus { border-color: #ec4899; box-shadow: 0 0 0 3px rgba(236,72,153,0.15); }
+    .invite-modal .msg { min-height: 16px; margin-top: 8px; font-size: 12px; color: #c0306a; }
+    .invite-modal .msg.error { color: #b91c5c; }
+    .invite-modal .actions { display: flex; gap: 8px; margin-top: 14px; }
+    .invite-modal .actions button {
+      flex: 1; padding: 10px; border-radius: 10px; border: none; cursor: pointer;
+      font-weight: 700; font-size: 13px;
+    }
+    .invite-modal .actions .cancel { background: #fdecf3; color: #c0306a; }
+    .invite-modal .actions .submit {
+      background: linear-gradient(135deg, #f9a8d4, #ec4899); color: #fff;
+    }
+    .invite-modal .actions .submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Invite Success Burst ── */
+    .invite-burst {
+      position: fixed; inset: 0; pointer-events: none; z-index: 5000;
+      display: none; align-items: center; justify-content: center;
+    }
+    .invite-burst.show { display: flex; }
+    .invite-burst .ib-core {
+      width: 120px; height: 120px; border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #fff, #f9a8d4 70%, #ec4899);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 60px; box-shadow: 0 0 80px rgba(236,72,153,0.5);
+      animation: ibPop 1.6s ease-out forwards;
+      position: relative; overflow: hidden;
+    }
+    .invite-burst .ib-core img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+    .invite-burst .ib-text {
+      position: absolute; top: 62%; left: 50%; transform: translateX(-50%);
+      font-size: 13px; font-weight: 700; color: #c0306a; text-align: center;
+      white-space: nowrap; background: rgba(255,255,255,0.85);
+      padding: 8px 14px; border-radius: 18px;
+      animation: ibFade 1.6s ease-out forwards;
+      box-shadow: 0 4px 16px rgba(236,72,153,0.2);
+    }
+    .invite-burst .ib-sparkle {
+      position: absolute; font-size: 20px; pointer-events: none;
+      animation: ibSpark 1.6s ease-out forwards;
+    }
+    @keyframes ibPop {
+      0% { transform: scale(0.2); opacity: 0; }
+      30% { transform: scale(1.2); opacity: 1; }
+      70% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0; }
+    }
+    @keyframes ibFade {
+      0%, 30% { opacity: 0; transform: translate(-50%, 10px); }
+      50% { opacity: 1; transform: translate(-50%, 0); }
+      90% { opacity: 1; }
+      100% { opacity: 0; }
+    }
+    @keyframes ibSpark {
+      0% { transform: translate(0,0) scale(0); opacity: 1; }
+      60% { opacity: 1; }
+      100% { transform: translate(var(--dx), var(--dy)) scale(1); opacity: 0; }
+    }
   </style>
   <script>
     document.addEventListener('touchmove', function (e) {
@@ -1065,9 +1168,30 @@
   <!-- Header -->
   <header class="header">
     <div class="header-logo" onclick="goHome()" style="cursor:pointer;">princess time</div>
-    <div class="header-icons">
-      <span style="cursor:pointer" onclick="openSettings()">⚙️</span>
+    <div class="header-icons" style="position:relative">
+      <span style="cursor:pointer" onclick="toggleHeaderMenu(event)">⚙️</span>
+      <div id="headerMenu" style="display:none;position:absolute;top:100%;right:0;margin-top:6px;background:#fff;border:1px solid #f3e3ec;border-radius:10px;box-shadow:0 6px 20px rgba(236,72,153,0.18);min-width:140px;z-index:100;overflow:hidden">
+        <button onclick="closeHeaderMenu();openSettings()" style="display:block;width:100%;padding:10px 14px;background:none;border:none;text-align:left;font-size:13px;color:#333;cursor:pointer">⚙️ API 키 설정</button>
+        <button onclick="closeHeaderMenu();logoutUser()" style="display:block;width:100%;padding:10px 14px;background:none;border:none;text-align:left;font-size:13px;color:#dc2626;cursor:pointer;border-top:1px solid #f3e3ec">🚪 로그아웃</button>
+      </div>
     </div>
+    <script>
+      function toggleHeaderMenu(e) {
+        if (e) e.stopPropagation();
+        var m = document.getElementById('headerMenu');
+        if (!m) return;
+        m.style.display = m.style.display === 'none' ? 'block' : 'none';
+      }
+      function closeHeaderMenu() {
+        var m = document.getElementById('headerMenu');
+        if (m) m.style.display = 'none';
+      }
+      document.addEventListener('click', function(e) {
+        var m = document.getElementById('headerMenu');
+        if (!m || m.style.display === 'none') return;
+        if (!m.parentElement.contains(e.target)) closeHeaderMenu();
+      });
+    </script>
   </header>
 
   <div id="homePage" style="display:flex;flex-direction:column;flex:1;">
@@ -1191,15 +1315,6 @@
 
   <!-- Profile Page (Instagram-style view) -->
   <div class="profile-page profile-view" id="profilePage">
-    <div class="ig-profile-topbar">
-      <span class="ig-profile-username" id="igProfileUsername">princess_chae</span>
-      <div style="position:relative;">
-        <span class="ig-profile-settings" onclick="toggleProfileMenu(event)" title="더보기" aria-label="더보기">⋯</span>
-        <div class="profile-menu" id="profileMenu" style="display:none;position:absolute;top:28px;right:0;background:#fff;border:1px solid #f3e3ec;border-radius:8px;box-shadow:0 4px 12px rgba(236,72,153,0.18);min-width:140px;z-index:50;overflow:hidden;">
-          <button onclick="logoutUser()" style="display:block;width:100%;padding:10px 14px;background:none;border:none;text-align:left;font-size:13px;color:#dc2626;cursor:pointer;">로그아웃하기</button>
-        </div>
-      </div>
-    </div>
     <div class="ig-profile-head">
       <div class="ig-profile-avatar" id="igProfileAvatar">👸</div>
       <div class="ig-profile-stats">
@@ -1210,15 +1325,11 @@
     </div>
     <div class="ig-profile-bio">
       <div class="ig-profile-name" id="igProfileName">princess_chae</div>
-      <div class="ig-profile-ipcode">
-        <span id="igProfileIp">PRC-XXXX-XXXX</span>
-        <button class="copy-btn" style="padding:2px 8px;font-size:11px;" onclick="copyIpCode()">📋</button>
-      </div>
-      <div class="ig-profile-desc" id="igProfileDesc"></div>
+      <div class="ig-profile-desc" id="igProfileDesc" style="white-space:pre-line;color:#333;font-size:13px;line-height:1.5;"></div>
     </div>
     <div class="ig-profile-actions">
       <button class="ig-btn" onclick="goProfileEdit()">프로필 편집</button>
-      <button class="ig-btn" onclick="showToast('곧 만나요 💌 친구를 초대하는 기능은 준비 중이에요')">초대</button>
+      <button class="ig-btn" onclick="openInviteModal()">캐릭터 초대</button>
     </div>
     <div class="ig-profile-tabs">
       <div class="ig-tab active">▦ 게시물</div>
@@ -1243,11 +1354,8 @@
     </div>
 
     <div class="profile-field">
-      <label>공주 IP 코드</label>
-      <div class="ipcode-row">
-        <input type="text" id="profileIpCode" readonly>
-        <button class="copy-btn" onclick="copyIpCode()">📋</button>
-      </div>
+      <label>📝 소개글</label>
+      <textarea id="profileBio" rows="3" maxlength="300" placeholder="자기소개를 적어주세요" style="width:100%;box-sizing:border-box;border:1px solid #f3e3ec;border-radius:8px;padding:10px;font-size:13px;resize:vertical;outline:none;"></textarea>
     </div>
 
     <div class="profile-field">
@@ -1282,6 +1390,28 @@
 
   <!-- Character Post Detail Page -->
   <div class="profile-page" id="characterPostPage" style="padding:16px 16px 100px;"></div>
+
+  <!-- Invite Code Modal -->
+  <div class="invite-modal-backdrop" id="inviteModal" onclick="if(event.target===this)closeInviteModal()">
+    <div class="invite-modal">
+      <h3>✨ 새로운 공주 초대하기</h3>
+      <p class="sub">관리자에게 받은 6자리 초대 코드를 입력해주세요.<br>새로운 공주가 당신의 세계에 합류할 거예요.</p>
+      <input class="code" id="inviteCodeInput" maxlength="6" placeholder="------" autocomplete="off"
+        oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)"
+        onkeydown="if(event.key==='Enter')submitInviteCode()">
+      <div class="msg" id="inviteMsg"></div>
+      <div class="actions">
+        <button class="cancel" onclick="closeInviteModal()">취소</button>
+        <button class="submit" id="inviteSubmitBtn" onclick="submitInviteCode()">초대하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Invite Burst -->
+  <div class="invite-burst" id="inviteBurst">
+    <div class="ib-core" id="inviteBurstCore">✨</div>
+    <div class="ib-text" id="inviteBurstText"></div>
+  </div>
 
   <!-- Bottom Nav -->
   <nav class="bottom-nav">
@@ -2287,7 +2417,11 @@
 
   // 좋아요: 0에서 시작 → 10초 동안 랜덤 증가
   function startLikeCounter(postId) {
-    const target = rand(8, 35);
+    const owned = (typeof window.MY_CHARACTERS_COUNT === 'number') ? window.MY_CHARACTERS_COUNT : 5;
+    const extra = Math.max(0, owned - 5) * 10;
+    const base = 10 + extra;
+    const top = Math.min(30 + extra, 150);
+    const target = rand(base, top);
     let count = 0;
     const end = Date.now() + 10000;
     function tick() {
@@ -2357,6 +2491,25 @@
     }
   }
 
+  if (typeof window.insertSortedDesc !== 'function') {
+    window.insertSortedDesc = function(feed, card) {
+      const cms = Number(card.dataset.createdMs) || 0;
+      const existing = feed.querySelectorAll('.post-card');
+      for (const ex of existing) {
+        let em = Number(ex.dataset.createdMs) || 0;
+        if (!em) {
+          const t = ex.querySelector('.post-time')?.textContent || '';
+          const d = new Date(t).getTime();
+          em = isNaN(d) ? 0 : d;
+          if (em) ex.dataset.createdMs = String(em);
+        }
+        if (cms > em) { feed.insertBefore(card, ex); return; }
+      }
+      feed.appendChild(card);
+    };
+  }
+  const insertSortedDesc = window.insertSortedDesc;
+
   function publishPost() {
     const input = document.getElementById('diaryInput');
     const text = input.value.trim();
@@ -2386,6 +2539,12 @@
     const card = document.createElement('div');
     card.className = 'post-card post-border';
     card.id = postId;
+    let maxMs = Date.now() + 3600000;
+    document.querySelectorAll('#dynamicFeed .post-card').forEach(c => {
+      const m = Number(c.dataset.createdMs) || 0;
+      if (m > maxMs) maxMs = m;
+    });
+    card.dataset.createdMs = String(maxMs + 1);
     card.innerHTML = `
       <div class="post-top">
         <div class="post-avatar" data-me="1">${avatarHtml(myProfile)}</div>
@@ -2404,7 +2563,6 @@
       <div class="post-actions">
         <button class="action-btn" onclick="toggleLike(this, '${postId}')">🤍</button>
         <button class="action-btn" onclick="focusMyPostComment('${postId}')">💬</button>
-        <span style="margin-left:auto;font-size:18px;">🔖</span>
       </div>
       <div class="likes-count" id="${postId}_likes">좋아요 0개</div>
       <div class="comments" id="${postId}_comments"></div>
@@ -2415,11 +2573,11 @@
           onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)submitMyPostComment('${postId}')"
           style="flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#333;">
         <button onclick="submitMyPostComment('${postId}')"
-          style="background:none;border:none;color:#ec4899;font-weight:700;font-size:13px;cursor:pointer;">게시</button>
+          class="comment-send-btn" aria-label="게시"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
       </div>
     `;
 
-    feed.insertBefore(card, feed.firstChild);
+    insertSortedDesc(feed, card);
     input.value = '';
     btn.textContent = '게시하기';
     btn.disabled = false;
@@ -2456,10 +2614,10 @@
     let accDelay = 0;
     shuffled.forEach(char => {
       const isNeg = negIds.has(char.id);
-      accDelay += char.delay() * 1000;
+      accDelay += char.delay() * 350;
       const myDelay = accDelay;
 
-      setTimeout(() => showTyping(postId, char), myDelay - 800);
+      setTimeout(() => showTyping(postId, char), Math.max(0, myDelay - 400));
       setTimeout(async () => {
         let body = await generateComment(char, text, isNeg);
         if (!body) body = pickComment(char, tags, isNeg);
@@ -2525,7 +2683,7 @@
         bar.innerHTML = `
           <div class="comment-avatar" style="width:28px;height:28px;">${avatarHtml(myProfile)}</div>
           <input type="text" id="${postId}_userCommentInput" placeholder="댓글 달기..." onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)submitMyPostComment('${postId}')" style="flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#333;">
-          <button onclick="submitMyPostComment('${postId}')" style="background:none;border:none;color:#ec4899;font-weight:700;font-size:13px;cursor:pointer;">게시</button>
+          <button onclick="submitMyPostComment('${postId}')" class="comment-send-btn" aria-label="게시"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
         `;
         card.appendChild(bar);
         changed = true;
@@ -2762,7 +2920,33 @@
       if (!raw) return;
       const data = JSON.parse(raw);
       const feed = document.getElementById('dynamicFeed');
-      if (feed && data.feedHtml) feed.innerHTML = data.feedHtml;
+      if (feed && data.feedHtml) {
+        feed.innerHTML = data.feedHtml;
+        let migrated = false;
+        feed.querySelectorAll('.post-card').forEach((card, idx) => {
+          card.querySelectorAll('.post-actions span').forEach(s => {
+            if ((s.textContent || '').includes('🔖')) { s.remove(); migrated = true; }
+          });
+          card.querySelectorAll('button').forEach(b => {
+            if ((b.textContent || '').trim() === '게시') {
+              b.className = 'comment-send-btn';
+              b.setAttribute('aria-label', '게시');
+              b.removeAttribute('style');
+              b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+              migrated = true;
+            }
+          });
+          if (!card.dataset.createdMs) {
+            const t = card.querySelector('.post-time')?.textContent || '';
+            const parsed = new Date(t).getTime();
+            card.dataset.createdMs = String(
+              !isNaN(parsed) && parsed > 0 ? parsed : (Date.now() - idx * 60000)
+            );
+            migrated = true;
+          }
+        });
+        if (migrated) setTimeout(persistState, 0);
+      }
       if (data.postTexts) Object.assign(POST_TEXTS, data.postTexts);
       if (typeof data.postCount === 'number') postCount = data.postCount;
       if (typeof data.commentSeq === 'number') _commentSeq = data.commentSeq;
@@ -2891,6 +3075,37 @@
 
   // 캐릭터 게시글 좋아요 상태 (charId:idx → {liked, count})
   const CHAR_POST_LIKES = {};
+  // DB post id 기반 좋아요 — 메인피드와 프로필에서 공유
+  function _hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = ((h<<5)-h) + s.charCodeAt(i); h |= 0; } return Math.abs(h); }
+  function getLikeCountByPostId(postId) {
+    if (!postId) return 0;
+    if (!CHAR_POST_LIKES[postId]) {
+      // 최초 진입 시 안정적인 기본 카운트(post id 해시 기반 30~330)
+      CHAR_POST_LIKES[postId] = { liked: false, count: 30 + (_hashStr(postId) % 300) };
+    }
+    return CHAR_POST_LIKES[postId].count;
+  }
+  function isLikedByPostId(postId) {
+    return !!(postId && CHAR_POST_LIKES[postId]?.liked);
+  }
+  function toggleLikeByPostId(btn, postId) {
+    if (!postId) return;
+    getLikeCountByPostId(postId);
+    const rec = CHAR_POST_LIKES[postId];
+    rec.liked = !rec.liked;
+    rec.count += rec.liked ? 1 : -1;
+    if (rec.count < 0) rec.count = 0;
+    // 같은 postId를 가진 모든 카드(메인피드/프로필) 동기화
+    document.querySelectorAll(`[data-post-id="${postId}"]`).forEach(card => {
+      const btnEl = card.querySelector('.post-actions .action-btn');
+      const cntEl = card.querySelector('.likes-count');
+      if (btnEl) btnEl.textContent = rec.liked ? '❤️' : '🤍';
+      if (cntEl) cntEl.textContent = `좋아요 ${rec.count}개`;
+    });
+    if (btn) btn.textContent = rec.liked ? '❤️' : '🤍';
+    try { persistState(); } catch {}
+  }
+
   function toggleCharPostLike(btn, charId, idx) {
     const key = `${charId}:${idx}`;
     const likesEl = btn.closest('.post-card').querySelector('.likes-count');
@@ -3258,8 +3473,11 @@
       const item = document.createElement('div');
       item.className = 'ig-grid-item';
       if (post.image) {
-        item.style.cssText = 'cursor:pointer;overflow:hidden;';
-        item.innerHTML = `<img src="${post.image}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">`;
+        item.style.cssText = 'cursor:pointer;overflow:hidden;position:relative;';
+        const isVid = /^data:video\//.test(post.image) || /\.(mp4|webm|mov)(\?|$)/i.test(post.image);
+        item.innerHTML = isVid
+          ? `<video src="${post.image}" muted playsinline style="width:100%;height:100%;object-fit:cover;display:block;"></video><span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;text-shadow:0 2px 6px rgba(0,0,0,0.5);pointer-events:none;">▶</span>`
+          : `<img src="${post.image}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;">`;
       } else {
         item.style.cssText = `background:linear-gradient(135deg,${c1},${c2});display:flex;align-items:center;justify-content:center;font-size:42px;cursor:pointer;`;
         item.textContent = post.emoji;
@@ -3273,8 +3491,10 @@
     const [c1, c2] = p.theme;
     const comments = randomCommentsFor(charId, post);
     const safeId = (charId+'-'+i).replace(/[^a-zA-Z0-9_-]/g,'_');
+    const dbId = post.__db && post.id ? post.id : null;
+    const dbAttr = dbId ? ` data-post-id="${dbId}"` : '';
     return `
-      <div class="post-card post-border" id="charPost_${charId}_${i}" style="margin-bottom:16px;">
+      <div class="post-card post-border" id="charPost_${charId}_${i}"${dbAttr} style="margin-bottom:16px;">
         <div class="post-top">
           <div class="post-avatar"><img src="${p.img}" alt="${charId}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
           <div class="post-info">
@@ -3286,7 +3506,12 @@
         ${(post.images && post.images.length > 1)
           ? `<div class="post-carousel" style="position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;">
               <div class="carousel-track" style="display:flex;width:100%;height:100%;transition:transform 0.3s ease;transform:translateX(0%);">
-                ${post.images.map(src => `<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover;flex-shrink:0;display:block;">`).join('')}
+                ${post.images.map(src => {
+                  const v = /^data:video\//.test(src) || /\.(mp4|webm|mov)(\?|$)/i.test(src);
+                  return v
+                    ? `<video src="${src}" controls playsinline style="width:100%;height:100%;object-fit:cover;flex-shrink:0;display:block;"></video>`
+                    : `<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover;flex-shrink:0;display:block;">`;
+                }).join('')}
               </div>
               <button onclick="carouselMove(this,-1,${post.images.length})" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.85);border:none;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.2);">‹</button>
               <button onclick="carouselMove(this,1,${post.images.length})" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.85);border:none;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.2);">›</button>
@@ -3295,13 +3520,17 @@
               </div>
             </div>`
           : post.image
-            ? `<img class="post-image" src="${post.image}" alt="" style="width:100%;aspect-ratio:1/1;object-fit:cover;display:block;">`
+            ? ((/^data:video\//.test(post.image) || /\.(mp4|webm|mov)(\?|$)/i.test(post.image))
+                ? `<video class="post-image" src="${post.image}" controls playsinline style="width:100%;aspect-ratio:1/1;object-fit:cover;display:block;background:#000;"></video>`
+                : `<img class="post-image" src="${post.image}" alt="" style="width:100%;aspect-ratio:1/1;object-fit:cover;display:block;">`)
             : `<div class="post-image" style="background:linear-gradient(135deg,${c1},${c2});display:flex;align-items:center;justify-content:center;font-size:120px;aspect-ratio:1/1;">${post.emoji}</div>`}
         <div class="post-actions">
-          <button class="action-btn" onclick="toggleCharPostLike(this,'${charId}',${i})">${CHAR_POST_LIKES[`${charId}:${i}`]?.liked ? '❤️' : '🤍'}</button>
+          ${dbId
+            ? `<button class="action-btn" onclick="toggleLikeByPostId(this, '${dbId}')">${isLikedByPostId(dbId) ? '❤️' : '🤍'}</button>`
+            : `<button class="action-btn" onclick="toggleCharPostLike(this,'${charId}',${i})">${CHAR_POST_LIKES[`${charId}:${i}`]?.liked ? '❤️' : '🤍'}</button>`}
           <button class="action-btn" onclick="focusCharPostComment('${charId}',${i})">💬</button>
         </div>
-        <div class="likes-count">좋아요 ${(() => { const k = `${charId}:${i}`; if (CHAR_POST_LIKES[k]) return CHAR_POST_LIKES[k].count; return charId === 'ruby_' ? (Math.floor(Math.random()*701)+100) : (Math.floor(Math.random()*200)+30); })()}개</div>
+        <div class="likes-count">좋아요 ${dbId ? getLikeCountByPostId(dbId) : (() => { const k = `${charId}:${i}`; if (CHAR_POST_LIKES[k]) return CHAR_POST_LIKES[k].count; return charId === 'ruby_' ? (Math.floor(Math.random()*701)+100) : (Math.floor(Math.random()*200)+30); })()}개</div>
         <div class="comments">
           ${comments.map(c => `
             <div class="comment">
@@ -3322,7 +3551,7 @@
             onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)submitCharPostComment('${charId}',${i})"
             style="flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#333;">
           <button onclick="submitCharPostComment('${charId}',${i})"
-            style="background:none;border:none;color:#ec4899;font-weight:700;font-size:13px;cursor:pointer;">게시</button>
+            class="comment-send-btn" aria-label="게시"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
         </div>
       </div>
     `;
@@ -3342,6 +3571,31 @@
       ${p.posts.map((post, i) => renderCharPostCard(charId, post, i, p)).join('')}
     `;
     p.posts.forEach((_, i) => renderCharPostThread(charId, i));
+    // DB 게시글: 저장된 댓글을 즉시 표시 (애니메이션 없음 — 메인피드 신규 게시글에서만 staggered)
+    p.posts.forEach((post, i) => {
+      if (!post.__db || !Array.isArray(post.__dbComments) || !post.__dbComments.length) return;
+      const card = document.getElementById(`charPost_${charId}_${i}`);
+      if (!card) return;
+      const commentsBox = card.querySelector('.comments');
+      const safeId = (charId+'-'+i).replace(/[^a-zA-Z0-9_-]/g,'_');
+      const anchor = document.getElementById(`cpc_list_${safeId}`);
+      post.__dbComments.forEach((c) => {
+        const prof = CHARACTER_PROFILES[c.id];
+        if (!prof || !commentsBox) return;
+        const el = document.createElement('div');
+        el.className = 'comment';
+        el.innerHTML = `
+          <div class="comment-avatar"><img src="${prof.img}" alt="${c.id}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+          <div class="comment-body">
+            <span class="comment-name">${c.id}</span>
+            <span class="comment-text">${escHtml(c.text)}</span>
+            <div class="comment-time">방금<span class="comment-delete" onclick="removeClosestComment(this)">삭제</span></div>
+          </div>
+        `;
+        if (anchor) commentsBox.insertBefore(el, anchor);
+        else commentsBox.appendChild(el);
+      });
+    });
     const target = document.getElementById(`charPost_${charId}_${idx}`);
     if (target) target.scrollIntoView({block:'start'});
   }
@@ -3377,6 +3631,8 @@
   }, {passive:true});
 
   function randomCommentsFor(charId, post) {
+    // DB 게시글이면 초기 렌더 시 댓글을 비워두고, 나중에 staggered 애니메이션으로 주입
+    if (post && post.__db) return [];
     if (post && Array.isArray(post.comments) && post.comments.length) {
       return post.comments.map(c => ({
         id: c.id,
@@ -3423,14 +3679,109 @@
     av.innerHTML = myProfile.avatarDataUrl
       ? `<img src="${myProfile.avatarDataUrl}" alt="me">`
       : '👸';
-    document.getElementById('igProfileUsername').textContent = myProfile.username;
-    document.getElementById('igProfileName').textContent = myProfile.username;
-    document.getElementById('igProfileIp').textContent = myProfile.ipCode;
-    document.getElementById('igProfileDesc').textContent = buildBioLine(myProfile);
-    const cards = document.querySelectorAll('#dynamicFeed .post-card');
+    const _ign = document.getElementById('igProfileUsername'); if (_ign) _ign.textContent = myProfile.username;
+    document.getElementById('igProfileName').textContent = myProfile.name || myProfile.username;
+    document.getElementById('igProfileDesc').textContent = myProfile.bio || '';
+    const cards = document.querySelectorAll('#dynamicFeed .post-card:not([id^="feedCharPost_"]):not([data-post-id])');
     document.getElementById('igStatPosts').textContent = cards.length;
     document.getElementById('igStatGrade').textContent = princessGradeEmoji(cards.length);
+    const friendCount = (typeof window.MY_CHARACTERS_COUNT === 'number')
+      ? window.MY_CHARACTERS_COUNT
+      : (Array.isArray(window.CHARACTERS) ? window.CHARACTERS.length : 5);
+    document.getElementById('igStatFriends').textContent = friendCount;
     renderProfileGrid(cards);
+  }
+
+  window.MY_CHARACTERS_COUNT = 5;
+  async function refreshMyCharactersCount() {
+    try {
+      const res = await fetch('/api/my/characters', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const j = await res.json();
+      if (j.ok && typeof j.count === 'number') {
+        window.MY_CHARACTERS_COUNT = j.count;
+        const el = document.getElementById('igStatFriends');
+        if (el) el.textContent = j.count;
+      }
+    } catch {}
+  }
+  setTimeout(refreshMyCharactersCount, 400);
+
+  function openInviteModal() {
+    const m = document.getElementById('inviteMsg'); if (m) { m.textContent = ''; m.classList.remove('error'); }
+    const i = document.getElementById('inviteCodeInput'); if (i) i.value = '';
+    document.getElementById('inviteModal').classList.add('show');
+    setTimeout(() => i?.focus(), 50);
+  }
+  function closeInviteModal() {
+    document.getElementById('inviteModal').classList.remove('show');
+  }
+  async function submitInviteCode() {
+    const input = document.getElementById('inviteCodeInput');
+    const msg = document.getElementById('inviteMsg');
+    const btn = document.getElementById('inviteSubmitBtn');
+    const code = (input.value || '').trim().toUpperCase();
+    msg.classList.remove('error'); msg.textContent = '';
+    if (code.length < 4) { msg.textContent = '코드를 정확히 입력해주세요'; msg.classList.add('error'); return; }
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/invite/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ code })
+      });
+      const j = await res.json();
+      if (res.ok && j.ok) {
+        closeInviteModal();
+        playInviteBurst(j.princess);
+        await refreshMyCharactersCount();
+        try {
+          if (typeof window.reloadCharacterProfiles === 'function') await window.reloadCharacterProfiles();
+        } catch {}
+      } else if (res.status === 409) {
+        msg.textContent = '이미 함께하고 있는 공주예요 🌸';
+        msg.classList.add('error');
+      } else if (res.status === 404) {
+        msg.textContent = '이 코드는 사용할 수 없어요';
+        msg.classList.add('error');
+      } else {
+        msg.textContent = '잠시 후 다시 시도해주세요';
+        msg.classList.add('error');
+      }
+    } catch {
+      msg.textContent = '네트워크 오류';
+      msg.classList.add('error');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+  function playInviteBurst(princess) {
+    const burst = document.getElementById('inviteBurst');
+    const core = document.getElementById('inviteBurstCore');
+    const text = document.getElementById('inviteBurstText');
+    if (!burst || !core || !text) return;
+    if (princess && princess.avatarUrl) {
+      core.innerHTML = `<img src="${princess.avatarUrl}" alt="">`;
+    } else {
+      core.textContent = '👑';
+    }
+    text.textContent = `${princess?.displayName || '새로운 공주'}님이 합류했어요 ✨`;
+    [...burst.querySelectorAll('.ib-sparkle')].forEach(s => s.remove());
+    const N = 10;
+    for (let i = 0; i < N; i++) {
+      const sp = document.createElement('span');
+      sp.className = 'ib-sparkle';
+      sp.textContent = ['✨','💖','🌸','⭐'][i % 4];
+      const angle = (Math.PI * 2 * i) / N + Math.random() * 0.4;
+      const dist = 80 + Math.random() * 60;
+      sp.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+      sp.style.setProperty('--dy', `${Math.sin(angle) * dist}px`);
+      sp.style.animationDelay = `${Math.random() * 0.15}s`;
+      burst.appendChild(sp);
+    }
+    burst.classList.add('show');
+    setTimeout(() => burst.classList.remove('show'), 1700);
   }
 
   function princessGradeEmoji(n) {
@@ -3498,6 +3849,8 @@
       const p = json.user.profile;
       myProfile = {
         username: p.username || 'princess_chae',
+        name: p.princessName || '',
+        bio: p.bio || '',
         avatarDataUrl: p.avatarUrl || null,
         ipCode: p.ipCode || '',
         mbti: p.mbti || '',
@@ -3516,6 +3869,7 @@
   async function saveProfile() {
     const username = document.getElementById('profileUsername').value.trim() || 'princess_chae';
     myProfile.username = username;
+    myProfile.bio = document.getElementById('profileBio')?.value.trim() || '';
     myProfile.mbti = document.getElementById('profileMbti').value;
     myProfile.birthDate = document.getElementById('profileBirthDate').value;
     myProfile.birthTime = document.getElementById('profileBirthTime').value;
@@ -3530,6 +3884,8 @@
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({
+          username: myProfile.username || undefined,
+          bio: myProfile.bio ?? undefined,
           mbti: myProfile.mbti || undefined,
           birthDate: myProfile.birthDate || undefined,
           birthTime: myProfile.birthTime || undefined,
@@ -3537,7 +3893,10 @@
         })
       });
       if (!res.ok) {
-        showToast('서버 저장 실패 ❌');
+        let msg = '서버 저장 실패 ❌';
+        try { const j = await res.json(); if (j?.error === 'UsernameTaken') msg = '이미 사용 중인 ID예요'; } catch {}
+        showToast(msg);
+        return;
       }
     } catch (e) {
       console.warn('[profile] save failed', e);
@@ -3577,7 +3936,7 @@
 
   function fillProfileForm() {
     document.getElementById('profileUsername').value = myProfile.username;
-    document.getElementById('profileIpCode').value = myProfile.ipCode;
+    const bioEl = document.getElementById('profileBio'); if (bioEl) bioEl.value = myProfile.bio || '';
     document.getElementById('profileMbti').value = myProfile.mbti || '';
     document.getElementById('profileBirthDate').value = myProfile.birthDate || '';
     document.getElementById('profileBirthTime').value = myProfile.birthTime || '';
@@ -3723,6 +4082,69 @@
       // 정적 서빙(file://, GitHub Pages 등)에서는 정상적으로 실패 — 무시
       console.log('[princessgram] /api/princesses unavailable, using local defaults');
     }
+  })();
+
+  // ── 관리자 floating 버튼 (ADMIN_EMAILS 목록의 이메일로 로그인 시만 표시) ──
+  (async function injectAdminLink() {
+    var ADMIN_EMAILS = ['wontyme88@naver.com', 'dongsoonh@lannerinc.co.kr'];
+    try {
+      var res = await fetch('/api/me', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      var j = await res.json();
+      var email = j && j.user && j.user.email ? String(j.user.email).toLowerCase() : '';
+      if (!email || ADMIN_EMAILS.indexOf(email) < 0) return;
+      var a = document.createElement('a');
+      a.href = '/admin/princesses';
+      a.textContent = '⚙ 관리자';
+      a.style.cssText = 'position:fixed;right:12px;bottom:12px;z-index:2147483647;background:#ec4899;color:#fff;padding:10px 14px;border-radius:999px;font-size:13px;font-weight:700;text-decoration:none;box-shadow:0 4px 14px rgba(236,72,153,0.45)';
+      document.body.appendChild(a);
+    } catch (e) {}
+  })();
+
+  // ── Phase 3: 관리자 작성 공주 게시글을 DB에서 가져와 CHARACTER_PROFILES에 prepend ──
+  (async function syncPrincessPostsFromDB() {
+    if (typeof CHARACTER_PROFILES === 'undefined') return;
+    const ids = Object.keys(CHARACTER_PROFILES);
+    await Promise.all(ids.map(async (id) => {
+      try {
+        const res = await fetch(`/api/princesses/${encodeURIComponent(id)}/posts?limit=30`, { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!json?.ok || !Array.isArray(json.items) || !json.items.length) return;
+        const profile = CHARACTER_PROFILES[id];
+        if (!profile) return;
+        // 최신순(items[0] 최신) → 가장 앞에 표시되도록 역순으로 unshift
+        const dbPosts = json.items.slice().reverse().map(item => {
+          const urls = Array.isArray(item.imageUrls) && item.imageUrls.length
+            ? item.imageUrls
+            : (item.imageUrl ? [item.imageUrl] : []);
+          return {
+            emoji: item.emoji || '✨',
+            caption: item.text || '',
+            image: urls[0] || null,
+            images: urls.length > 1 ? urls : undefined,
+            comments: [], // 초기 렌더에서는 비워두기
+            id: item.id,
+            __db: true,
+            __dbComments: Array.isArray(item.comments) ? item.comments : []
+          };
+        });
+        // DB 게시글이 있으면 하드코딩 게시글은 무시 (중복 방지)
+        profile.posts = dbPosts;
+      } catch (e) { /* ignore */ }
+    }));
+    console.log('[princessgram] DB princess posts synced');
+    // 이미 열린 캐릭터 프로필이 있다면 재렌더 (sync가 사용자 클릭보다 늦게 끝난 경우)
+    try {
+      const openProfile = document.querySelector('.profile-page.character-profile.open, #characterProfilePage.open');
+      const charProfileGrid = document.querySelector('[id^="charProfileGrid_"]');
+      if (charProfileGrid) {
+        const m = charProfileGrid.id.match(/^charProfileGrid_(.+)$/);
+        if (m && typeof goCharacterProfile === 'function') {
+          goCharacterProfile(m[1]);
+        }
+      }
+    } catch (e) {}
   })();
 
   // 현재 로그인된 사용자 닉네임을 헤더에 적용 (Next.js /app 환경)
@@ -4223,7 +4645,7 @@
                   onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)submitMyPostComment('${postId}')"
                   style="flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#333;">
                 <button onclick="submitMyPostComment('${postId}')"
-                  style="background:none;border:none;color:#ec4899;font-weight:700;font-size:13px;cursor:pointer;">게시</button>
+                  class="comment-send-btn" aria-label="게시"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
               </div>
             `;
             feed.insertBefore(card, feed.firstChild);
@@ -4295,6 +4717,251 @@
     } catch (e) {
       // 비로그인/정적 환경에서는 조용히 패스
     }
+  })();
+
+  // 메인피드 공주 카드의 댓글 입력 처리
+  window.submitFeedCharComment = function(postId) {
+    const input = document.getElementById(`feedCharPost_${postId}_input`);
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    const box = document.getElementById(`feedCharPost_${postId}_comments`);
+    if (!box) return;
+    const el = document.createElement('div');
+    el.className = 'comment';
+    el.style.cssText = 'opacity:0;transform:translateY(6px);transition:opacity .35s ease,transform .35s ease;';
+    el.innerHTML = `
+      <div class="comment-avatar">${avatarHtml(myProfile)}</div>
+      <div class="comment-body">
+        <span class="comment-name">${escHtml(myProfile.username)}</span>
+        <span class="comment-text">${escHtml(text)}</span>
+        <div class="comment-time">방금<span class="comment-delete" onclick="removeClosestComment(this)">삭제</span></div>
+      </div>
+    `;
+    box.appendChild(el);
+    requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
+    input.value = '';
+  };
+
+  // ── 메인피드에 공주 게시글 통합 (인스타그램 스타일) ──
+  (function setupPrincessFeedIntegration() {
+    const RENDERED = new Set();
+    let lastSyncAt = 0;
+    let inFlight = false;
+
+    function isVideoUrl(u) {
+      return /^data:video\//.test(u) || /\.(mp4|webm|mov)(\?|$)/i.test(u);
+    }
+
+    function buildPrincessCard(charId, post, animateComments) {
+      const prof = (typeof CHARACTER_PROFILES !== 'undefined') ? CHARACTER_PROFILES[charId] : null;
+      const avatarSrc = prof?.img || '';
+      const urls = Array.isArray(post.imageUrls) && post.imageUrls.length
+        ? post.imageUrls
+        : (post.imageUrl ? [post.imageUrl] : []);
+      let mediaHtml = '';
+      if (urls.length > 1) {
+        mediaHtml = `<div class="post-carousel" style="position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;">
+          <div class="carousel-track" style="display:flex;width:100%;height:100%;transition:transform 0.3s ease;transform:translateX(0%);">
+            ${urls.map(src => isVideoUrl(src)
+              ? `<video src="${src}" controls playsinline style="width:100%;height:100%;object-fit:cover;flex-shrink:0;display:block;"></video>`
+              : `<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover;flex-shrink:0;display:block;">`).join('')}
+          </div>
+          <button onclick="carouselMove(this,-1,${urls.length})" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.85);border:none;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.2);">‹</button>
+          <button onclick="carouselMove(this,1,${urls.length})" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.85);border:none;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.2);">›</button>
+        </div>`;
+      } else if (urls.length === 1) {
+        const src = urls[0];
+        mediaHtml = isVideoUrl(src)
+          ? `<video class="post-image" src="${src}" controls playsinline style="width:100%;aspect-ratio:1/1;object-fit:cover;display:block;background:#000;"></video>`
+          : `<img class="post-image" src="${src}" alt="" style="width:100%;aspect-ratio:1/1;object-fit:cover;display:block;">`;
+      }
+      const card = document.createElement('div');
+      card.className = 'post-card post-border';
+      card.id = `feedCharPost_${post.id}`;
+      card.dataset.postId = String(post.id);
+      card.dataset.createdMs = String(new Date(post.createdAt).getTime() || 0);
+      const timeText = new Date(post.createdAt).toLocaleString('ko-KR');
+      card.innerHTML = `
+        <div class="post-top">
+          <div class="post-avatar"><img src="${avatarSrc}" alt="${charId}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+          <div class="post-info">
+            <div class="post-username">${charId}</div>
+            <div class="post-time">${timeText}</div>
+          </div>
+        </div>
+        <div class="post-content">${post.emoji ? `<span style="margin-right:6px;">${post.emoji}</span>` : ''}${escHtml(post.text || '')}</div>
+        ${mediaHtml}
+        <div class="post-actions">
+          <button class="action-btn" onclick="toggleLikeByPostId(this, '${post.id}')">${isLikedByPostId(post.id) ? '❤️' : '🤍'}</button>
+          <button class="action-btn" onclick="document.getElementById('feedCharPost_${post.id}_input')?.focus()">💬</button>
+        </div>
+        <div class="likes-count">좋아요 ${getLikeCountByPostId(post.id)}개</div>
+        <div class="comments" id="feedCharPost_${post.id}_comments"></div>
+        <div style="display:flex;gap:8px;padding:10px 16px;border-top:1px solid #f3e3ec;align-items:center;">
+          <div class="comment-avatar" style="width:28px;height:28px;">${avatarHtml(myProfile)}</div>
+          <input type="text" id="feedCharPost_${post.id}_input"
+            placeholder="댓글 달기..."
+            onkeydown="if(event.key==='Enter'&&!event.isComposing&&event.keyCode!==229)submitFeedCharComment('${post.id}')"
+            style="flex:1;border:none;outline:none;background:transparent;font-size:13px;color:#333;">
+          <button onclick="submitFeedCharComment('${post.id}')"
+            class="comment-send-btn" aria-label="게시"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+        </div>
+      `;
+      // 저장된 공주 댓글
+      const cmts = Array.isArray(post.comments) ? post.comments : [];
+      const cmtBox = card.querySelector('.comments');
+      // 이미 있던 게시글: 댓글 즉시 표시. 새로 들어온 게시글: 입력중 → staggered fade-in
+      if (!animateComments) {
+        cmts.forEach((c) => {
+          const cprof = (typeof CHARACTER_PROFILES !== 'undefined') ? CHARACTER_PROFILES[c.id] : null;
+          if (!cprof) return;
+          const el = document.createElement('div');
+          el.className = 'comment';
+          el.innerHTML = `
+            <div class="comment-avatar"><img src="${cprof.img}" alt="${c.id}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+            <div class="comment-body">
+              <span class="comment-name">${c.id}</span>
+              <span class="comment-text">${escHtml(c.text)}</span>
+              <div class="comment-time">방금</div>
+            </div>
+          `;
+          cmtBox.appendChild(el);
+        });
+        return card;
+      }
+      const TYPING_MS = 1200;
+      const GAP_MS = 1800;
+      cmts.forEach((c, k) => {
+        const baseDelay = 800 + k * GAP_MS;
+        // 입력 중 indicator
+        setTimeout(() => {
+          if (!document.body.contains(card)) return;
+          const cprof = (typeof CHARACTER_PROFILES !== 'undefined') ? CHARACTER_PROFILES[c.id] : null;
+          if (!cprof) return;
+          const typingId = `feedCharPost_${post.id}_typing_${k}`;
+          const typing = document.createElement('div');
+          typing.className = 'typing-indicator';
+          typing.id = typingId;
+          typing.innerHTML = `
+            <div class="comment-avatar" style="width:28px;height:28px;"><img src="${cprof.img}" alt="${c.id}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+            <span style="font-size:12px;color:#bbb;">${c.id} 입력중</span>
+            <div class="typing-dots"><span></span><span></span><span></span></div>
+          `;
+          cmtBox.appendChild(typing);
+        }, baseDelay);
+        // 실제 댓글로 교체
+        setTimeout(() => {
+          if (!document.body.contains(card)) return;
+          const cprof = (typeof CHARACTER_PROFILES !== 'undefined') ? CHARACTER_PROFILES[c.id] : null;
+          if (!cprof) return;
+          const typing = document.getElementById(`feedCharPost_${post.id}_typing_${k}`);
+          if (typing) typing.remove();
+          const el = document.createElement('div');
+          el.className = 'comment';
+          el.style.cssText = 'opacity:0;transform:translateY(6px);transition:opacity .35s ease,transform .35s ease;';
+          el.innerHTML = `
+            <div class="comment-avatar"><img src="${cprof.img}" alt="${c.id}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;"></div>
+            <div class="comment-body">
+              <span class="comment-name">${c.id}</span>
+              <span class="comment-text">${escHtml(c.text)}</span>
+              <div class="comment-time">방금</div>
+            </div>
+          `;
+          cmtBox.appendChild(el);
+          requestAnimationFrame(() => { el.style.opacity = '1'; el.style.transform = 'translateY(0)'; });
+        }, baseDelay + TYPING_MS);
+      });
+      return card;
+    }
+
+    function insertSortedDesc(feed, card) {
+      const cms = Number(card.dataset.createdMs) || 0;
+      const existing = feed.querySelectorAll('.post-card');
+      for (const ex of existing) {
+        const em = Number(ex.dataset.createdMs) || (() => {
+          const t = ex.querySelector('.post-time')?.textContent || '';
+          const d = new Date(t).getTime();
+          return isNaN(d) ? 0 : d;
+        })();
+        if (!ex.dataset.createdMs && em) ex.dataset.createdMs = String(em);
+        if (cms > em) { feed.insertBefore(card, ex); return; }
+      }
+      feed.appendChild(card);
+    }
+
+    async function fetchPrincessPosts() {
+      try {
+        const pres = await fetch('/api/princesses', { credentials: 'same-origin' });
+        if (!pres.ok) return [];
+        const pjson = await pres.json();
+        const ids = (pjson.princesses || []).map(p => p.id);
+        const all = await Promise.all(ids.map(async (id) => {
+          try {
+            const r = await fetch(`/api/princesses/${encodeURIComponent(id)}/posts?limit=20`, { credentials: 'same-origin' });
+            if (!r.ok) return [];
+            const j = await r.json();
+            return (j.items || []).map(it => ({ ...it, charId: id }));
+          } catch { return []; }
+        }));
+        return all.flat();
+      } catch { return []; }
+    }
+
+    function addIfNew(feed, it, animateComments) {
+      const cardId = `feedCharPost_${it.id}`;
+      const existing = document.getElementById(cardId) || feed.querySelector(`[data-post-id="${it.id}"]`);
+      if (RENDERED.has(it.id) || existing) {
+        RENDERED.add(it.id);
+        if (existing && !existing.id) existing.id = cardId;
+        return false;
+      }
+      RENDERED.add(it.id);
+      const card = buildPrincessCard(it.charId, it, animateComments);
+      insertSortedDesc(feed, card);
+      const ts = new Date(it.createdAt).getTime();
+      if (ts > lastSyncAt) lastSyncAt = ts;
+      return true;
+    }
+
+    async function loadInitial() {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const feed = document.getElementById('dynamicFeed');
+        if (!feed) return;
+        // 옛 잔재(다른 IIFE 실행, 복원된 카드 등) 전부 제거 후 fresh 렌더
+        feed.querySelectorAll('[id^="feedCharPost_"], [data-post-id]').forEach(el => el.remove());
+        RENDERED.clear();
+        const items = await fetchPrincessPosts();
+        items.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+        for (const it of items) addIfNew(feed, it, false); // 초기 로드: 댓글 즉시 표시
+        const hint = document.getElementById('emptyHint');
+        if (hint && feed.querySelectorAll('.post-card').length > 0) hint.style.display = 'none';
+      } finally { inFlight = false; }
+    }
+
+    async function pollNew() {
+      if (document.hidden || inFlight) return;
+      inFlight = true;
+      try {
+        const feed = document.getElementById('dynamicFeed');
+        if (!feed) return;
+        const items = await fetchPrincessPosts();
+        const fresh = items.filter(it => !RENDERED.has(it.id) && !document.getElementById(`feedCharPost_${it.id}`));
+        fresh.sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
+        let added = 0;
+        for (const it of fresh) if (addIfNew(feed, it, true)) added++; // 폴링으로 들어온 신규: 입력중 → staggered
+        if (added) console.log('[princessgram] feed: +', added, 'new princess posts');
+      } finally { inFlight = false; }
+    }
+
+    // 초기 로드 (기존 backfillFromServer 이후 200ms 뒤 — 유저 게시글 카드들이 먼저 자리잡도록)
+    setTimeout(loadInitial, 300);
+    // 60초 폴링
+    setInterval(pollNew, 60_000);
+    // 탭 다시 활성되면 즉시 한 번
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) pollNew(); });
   })();
 
   // ── 프로필 아바타 클릭 → 해당 프로필로 이동 (메신저/DM 화면 제외) ──

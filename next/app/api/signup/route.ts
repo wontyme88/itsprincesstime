@@ -2,8 +2,6 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { signupSchema } from "@/lib/zod-schemas";
-import { generateOtp, hashOtp } from "@/lib/otp";
-import { sendVerificationEmail } from "@/lib/email";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 const IP_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -71,6 +69,7 @@ export async function POST(req: Request) {
       email,
       name: data.name,
       passwordHash,
+      emailVerified: new Date(),
       profile: {
         create: {
           username,
@@ -87,23 +86,5 @@ export async function POST(req: Request) {
     }
   });
 
-  const code = generateOtp();
-  const codeHash = await hashOtp(code);
-  await prisma.otpCode.create({
-    data: {
-      userId: user.id,
-      email,
-      purpose: "email_verify",
-      codeHash,
-      expiresAt: new Date(Date.now() + 15 * 60_000)
-    }
-  });
-
-  try {
-    await sendVerificationEmail(email, code);
-  } catch (e) {
-    console.warn("[signup] email send failed", e);
-  }
-
-  return NextResponse.json({ ok: true, email });
+  return NextResponse.json({ ok: true, email, verified: true });
 }

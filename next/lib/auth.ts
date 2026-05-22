@@ -30,8 +30,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const ok = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!ok) return null;
 
-        if (!user.emailVerified) return null;
-
         return { id: user.id, email: user.email, name: user.name ?? undefined };
       }
     })
