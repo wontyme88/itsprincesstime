@@ -53,16 +53,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "EmailExists" }, { status: 409 });
   }
 
-  // username: 이메일 prefix + 랜덤 4자리 (충돌 시 재시도)
-  let username = data.name.toLowerCase().replace(/[^a-z0-9_]/g, "") || "princess";
-  for (let i = 0; i < 5; i++) {
-    const suffix = Math.floor(1000 + Math.random() * 9000);
-    const candidate = `${username}_${suffix}`;
-    const dup = await prisma.userProfile.findUnique({ where: { username: candidate } });
-    if (!dup) {
-      username = candidate;
-      break;
-    }
+  // username: 가입 시 입력한 ID(name)를 그대로 사용. 이미 쓰는 ID면 에러.
+  const username = data.name.trim();
+  const dupUsername = await prisma.userProfile.findUnique({ where: { username } });
+  if (dupUsername) {
+    return NextResponse.json({ ok: false, error: "UsernameExists" }, { status: 409 });
   }
 
   const ipCode = await generateUniqueIpCode();

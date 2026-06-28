@@ -50,6 +50,8 @@ export default function SignupPage() {
       if (!res.ok || !json.ok) {
         if (json.error === "EmailExists") {
           setServerError("이미 가입된 이메일이에요");
+        } else if (json.error === "UsernameExists") {
+          setServerError("이미 사용 중인 아이디예요. 다른 아이디를 입력해주세요.");
         } else if (json.error === "RateLimited") {
           setServerError("잠시 후 다시 시도해주세요");
         } else {
