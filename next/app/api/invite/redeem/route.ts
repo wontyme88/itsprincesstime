@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -8,11 +8,11 @@ import { prisma } from "@/lib/prisma";
  * 해당 코드의 공주를 사용자의 보유 목록에 추가.
  */
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) {
+  const authUser = await getSessionUser();
+  if (!authUser) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
-  const userId = (session.user as { id?: string }).id;
+  const userId = authUser.id;
   if (!userId) return NextResponse.json({ ok: false, error: "NoUserId" }, { status: 401 });
 
   let body: any;

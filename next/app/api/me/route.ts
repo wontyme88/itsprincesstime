@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 import { profileUpdateSchema } from "@/lib/zod-schemas";
 
@@ -16,8 +16,8 @@ const profileSelect = {
 } as const;
 
 export async function GET() {
-  const session = await auth();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const authUser = await getSessionUser();
+  const userId = authUser?.id;
   if (!userId) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
@@ -35,8 +35,8 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  const session = await auth();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const authUser = await getSessionUser();
+  const userId = authUser?.id;
   if (!userId) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 
 type PersonalityShape = {
@@ -15,8 +15,8 @@ export async function POST(
   _req: Request,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const authUser = await getSessionUser();
+  const userId = authUser?.id;
   if (!userId) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   const post = await prisma.post.findFirst({ where: { id: params.id, userId } });

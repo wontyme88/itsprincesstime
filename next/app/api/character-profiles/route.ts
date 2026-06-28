@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -9,11 +9,11 @@ import { prisma } from "@/lib/prisma";
  * { ok, profiles: { [charId]: { name, img, bio, posts: [{ emoji, image, caption, comments: [{id,text}] }] } } }
  */
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) {
+  const authUser = await getSessionUser();
+  if (!authUser) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
-  const userId = (session.user as { id?: string }).id;
+  const userId = authUser.id;
 
   // 사용자가 보유한 공주 + 기본 공주(아직 관계가 없는 경우에도 fallback)
   const relations = userId

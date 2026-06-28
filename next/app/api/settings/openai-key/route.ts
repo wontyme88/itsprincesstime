@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt, maskKey } from "@/lib/crypto";
 
@@ -9,8 +9,8 @@ const putSchema = z.object({
 });
 
 export async function GET() {
-  const session = await auth();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const authUser = await getSessionUser();
+  const userId = authUser?.id;
   if (!userId) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   const sec = await prisma.userSecret.findUnique({ where: { userId } });
@@ -27,8 +27,8 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
-  const session = await auth();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const authUser = await getSessionUser();
+  const userId = authUser?.id;
   if (!userId) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   let body: unknown;
@@ -62,8 +62,8 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE() {
-  const session = await auth();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const authUser = await getSessionUser();
+  const userId = authUser?.id;
   if (!userId) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   await prisma.userSecret.updateMany({

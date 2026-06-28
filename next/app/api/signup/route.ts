@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { signupSchema } from "@/lib/zod-schemas";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const IP_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function makeIpCode() {
@@ -19,6 +19,11 @@ async function generateUniqueIpCode() {
   return makeIpCode();
 }
 
+/**
+ * 회원가입: 인증 계정은 Supabase Auth(auth.users)에 생성하고,
+ * 같은 UUID로 Prisma User/UserProfile 프로필 행을 만든다.
+ * 비밀번호는 Supabase가 관리하므로 여기서 해싱/보관하지 않는다.
+ */
 export async function POST(req: Request) {
   const ip = clientIp(req);
   const rl = rateLimit(`signup:${ip}`, 5, 60_000);
@@ -60,31 +65,50 @@ export async function POST(req: Request) {
     }
   }
 
-  const passwordHash = await bcrypt.hash(data.password, 12);
-
   const ipCode = await generateUniqueIpCode();
 
-  const user = await prisma.user.create({
-    data: {
-      email,
-      name: data.name,
-      passwordHash,
-      emailVerified: new Date(),
-      profile: {
-        create: {
-          username,
-          princessName: data.princessName,
-          birthDate: data.birthDate ? new Date(data.birthDate) : null,
-          birthTime: data.birthTime ?? null,
-          mbti: data.mbti ?? null,
-          ipCode,
-          interests: data.interests,
-          agreedTos: data.agreedTos,
-          agreedPrivacy: data.agreedPrivacy
+  // 1) Supabase Auth 계정 생성 (이메일 인증 즉시 완료 처리)
+  const supabaseAdmin = createSupabaseAdminClient();
+  const { data: created, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password: data.password,
+    email_confirm: true
+  });
+  if (authError || !created?.user) {
+    const msg = authError?.message?.toLowerCase() ?? "";
+    if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
+      return NextResponse.json({ ok: false, error: "EmailExists" }, { status: 409 });
+    }
+    return NextResponse.json({ ok: false, error: "SignupFailed" }, { status: 500 });
+  }
+
+  // 2) 같은 UUID로 Prisma 프로필 행 생성. 실패 시 방금 만든 Auth 계정을 롤백.
+  try {
+    await prisma.user.create({
+      data: {
+        id: created.user.id,
+        email,
+        name: data.name,
+        emailVerified: new Date(),
+        profile: {
+          create: {
+            username,
+            princessName: data.princessName,
+            birthDate: data.birthDate ? new Date(data.birthDate) : null,
+            birthTime: data.birthTime ?? null,
+            mbti: data.mbti ?? null,
+            ipCode,
+            interests: data.interests,
+            agreedTos: data.agreedTos,
+            agreedPrivacy: data.agreedPrivacy
+          }
         }
       }
-    }
-  });
+    });
+  } catch (e) {
+    await supabaseAdmin.auth.admin.deleteUser(created.user.id).catch(() => {});
+    throw e;
+  }
 
   return NextResponse.json({ ok: true, email, verified: true });
 }

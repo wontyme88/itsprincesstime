@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 
 function intimacyLevel(score: number): { label: string; color: string; pct: number } {
@@ -14,8 +14,8 @@ function intimacyLevel(score: number): { label: string; color: string; pct: numb
 }
 
 export default async function IntimacyPage() {
-  const session = await auth();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const authUser = await getSessionUser();
+  const userId = authUser?.id;
   if (!userId) redirect("/login?next=/settings/intimacy");
 
   const [princesses, relations] = await Promise.all([

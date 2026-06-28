@@ -3,7 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function LoginForm() {
   const router = useRouter();
@@ -12,35 +12,16 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState<string | null>(null);
-  const [needsVerify, setNeedsVerify] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
-    setNeedsVerify(false);
     setSubmitting(true);
     try {
-      const res = await signIn("credentials", {
-        email,
-        password,
-        redirect: false
-      });
-      if (res?.error) {
-        // 이메일 미인증인지 확인
-        try {
-          const sres = await fetch("/api/check-status", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email })
-          });
-          const sjson = await sres.json();
-          if (sjson.exists && !sjson.verified) {
-            setNeedsVerify(true);
-            setErr("이메일 인증이 완료되지 않았어요");
-            return;
-          }
-        } catch {}
+      const supabase = createSupabaseBrowserClient();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
         setErr("이메일 또는 비밀번호가 올바르지 않아요");
         return;
       }
@@ -78,19 +59,7 @@ function LoginForm() {
           />
         </div>
         {err && (
-          <div className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600">
-            {err}
-            {needsVerify && (
-              <div className="mt-1.5">
-                <Link
-                  href={`/verify-email?email=${encodeURIComponent(email)}`}
-                  className="font-semibold underline"
-                >
-                  이메일 인증하러 가기 →
-                </Link>
-              </div>
-            )}
-          </div>
+          <div className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600">{err}</div>
         )}
         <button className="btn-primary w-full" disabled={submitting}>
           {submitting ? "로그인 중..." : "로그인"}

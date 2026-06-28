@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth-user";
 import { listMemories, deleteMemory } from "@/lib/memory";
 
 export async function GET() {
-  const session = await auth();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const authUser = await getSessionUser();
+  const userId = authUser?.id;
   if (!userId) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   const rows = await listMemories({ userId });
@@ -21,8 +21,8 @@ export async function GET() {
 }
 
 export async function DELETE(req: Request) {
-  const session = await auth();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const authUser = await getSessionUser();
+  const userId = authUser?.id;
   if (!userId) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   const url = new URL(req.url);

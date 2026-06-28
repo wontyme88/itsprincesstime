@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth-user";
 
 export default async function LandingPage() {
-  const session = await auth();
-  if (session?.user) redirect("/app/");
+  const authUser = await getSessionUser();
+  if (authUser) redirect("/app/");
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center px-6">

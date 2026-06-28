@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 
@@ -10,8 +10,8 @@ export async function GET(
   _req: Request,
   { params }: { params: { charId: string; idx: string } }
 ) {
-  const session = await auth();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const authUser = await getSessionUser();
+  const userId = authUser?.id;
   if (!userId) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   const postIdx = parseInt(params.idx, 10);
   if (!Number.isInteger(postIdx)) return NextResponse.json({ ok: false }, { status: 400 });
@@ -42,8 +42,8 @@ export async function POST(
   req: Request,
   { params }: { params: { charId: string; idx: string } }
 ) {
-  const session = await auth();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
+  const authUser = await getSessionUser();
+  const userId = authUser?.id;
   if (!userId) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   const ip = clientIp(req);

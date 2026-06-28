@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -7,11 +7,11 @@ import { prisma } from "@/lib/prisma";
  * 사용자가 보유한 공주(기본 + 초대) 목록.
  */
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) {
+  const authUser = await getSessionUser();
+  if (!authUser) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
-  const userId = (session.user as { id?: string }).id;
+  const userId = authUser.id;
   if (!userId) return NextResponse.json({ ok: false, error: "NoUserId" }, { status: 401 });
 
   const relations = await prisma.userPrincessRelation.findMany({

@@ -10,56 +10,19 @@ datasource db {
   extensions = [vector]
 }
 
-// ───── Auth.js core ─────
+// ───── 사용자 (인증은 Supabase Auth가 관리) ─────
+// id 는 Supabase auth.users 의 UUID 와 동일 값을 사용한다.
+// 비밀번호/세션/이메일 인증은 Supabase Auth 가 처리하므로 여기서 보관하지 않는다.
 model User {
-  id            String    @id @default(cuid())
+  id            String    @id
   email         String    @unique
   emailVerified DateTime?
   name          String?
   image         String?
-  passwordHash  String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  profile     UserProfile?
-  accounts    Account[]
-  sessions    Session[]
-  otpCodes    OtpCode[]
-  resetTokens PasswordResetToken[]
-}
-
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
+  profile UserProfile?
 }
 
 // ───── 사용자 프로필 ─────
@@ -81,40 +44,12 @@ model UserProfile {
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// ───── OTP / 비밀번호 재설정 ─────
-model OtpCode {
-  id         String    @id @default(cuid())
-  userId     String?
-  email      String?
-  purpose    String                              // 'email_verify' | 'password_reset'
-  codeHash   String
-  expiresAt  DateTime
-  attempts   Int       @default(0)
-  consumedAt DateTime?
-  createdAt  DateTime  @default(now())
-  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([email, purpose])
-}
-
 model UserSecret {
   userId                String   @id
   openaiApiKeyEncrypted String?  @db.Text
   openaiKeyIv           String?
   openaiKeyTag          String?
   updatedAt             DateTime @updatedAt
-}
-
-model PasswordResetToken {
-  id        String   @id @default(cuid())
-  userId    String
-  tokenHash String   @unique
-  expiresAt DateTime
-  consumed  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
 }
 
 // ───── 공주 시드 ─────
