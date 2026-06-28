@@ -1,19 +1,10 @@
 import { NextResponse } from "next/server";
-<<<<<<< HEAD
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const session = await auth();
-  const userId = (session?.user as { id?: string } | undefined)?.id;
-=======
 import { getSessionUser } from "@/lib/auth-user";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const authUser = await getSessionUser();
   const userId = authUser?.id;
->>>>>>> 427f0cd (Migrate auth and admin features to Supabase)
   if (!userId) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   // 보유 여부 확인 (기본 공주 OR 초대받은 공주)

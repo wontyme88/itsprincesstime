@@ -5,8 +5,6 @@ import { getSessionUser } from "@/lib/auth-user";
 
 const ADMIN_EMAIL = "wontyme88@naver.com";
 
-const ADMIN_EMAIL = "wontyme88@naver.com";
-
 export async function requireAdmin(): Promise<
   | { ok: true; userId: string; email: string }
   | { ok: false; status: 401 | 403 }
