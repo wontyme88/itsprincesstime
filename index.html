@@ -1240,7 +1240,7 @@
     <div class="write-header">
       <div class="write-avatar" id="writeAvatar">👸</div>
       <div>
-        <div class="write-name" id="writeName">princess_chae</div>
+        <div class="write-name" id="writeName"></div>
         <div class="write-sub" id="writeSub">오늘 하루를 기록해봐 🌷</div>
       </div>
     </div>
@@ -1324,7 +1324,7 @@
       </div>
     </div>
     <div class="ig-profile-bio">
-      <div class="ig-profile-name" id="igProfileName">princess_chae</div>
+      <div class="ig-profile-name" id="igProfileName"></div>
       <div class="ig-profile-desc" id="igProfileDesc" style="white-space:pre-line;color:#333;font-size:13px;line-height:1.5;"></div>
     </div>
     <div class="ig-profile-actions">
@@ -1350,7 +1350,12 @@
 
     <div class="profile-field">
       <label>아이디</label>
-      <input type="text" id="profileUsername" placeholder="princess_chae" maxlength="20">
+      <input type="text" id="profileUsername" placeholder="아이디" maxlength="20">
+    </div>
+
+    <div class="profile-field">
+      <label>이름</label>
+      <input type="text" id="profileName" placeholder="이름을 입력해주세요" maxlength="20">
     </div>
 
     <div class="profile-field">
@@ -3146,7 +3151,7 @@
     document.getElementById('dmListView').style.display = '';
     _openDMCharId = null;
     const headerName = document.getElementById('dmHeaderUsername');
-    if (headerName) headerName.textContent = myProfile.username || 'princess_chae';
+    if (headerName) headerName.textContent = myProfile.username || '';
     renderDMList();
   }
   function goHome() {
@@ -3181,14 +3186,7 @@
     if (menu) menu.style.display = 'none';
     if (!confirm('로그아웃 할까요? 게시물·DM 등 모든 기록은 그대로 보관돼요.')) return;
     try {
-      const csrfRes = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
-      const { csrfToken } = await csrfRes.json();
-      await fetch('/api/auth/signout', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ csrfToken, callbackUrl: '/login' })
-      });
+      await fetch('/api/auth/signout', { method: 'POST', credentials: 'same-origin' });
     } catch (e) { console.warn('[auth] signout request failed', e); }
     // 다른 사용자가 같은 브라우저로 로그인할 때 옛 캐시가 보이지 않도록 클리어
     try {
@@ -3831,7 +3829,9 @@
       if (raw) return JSON.parse(raw);
     } catch (e) {}
     return {
-      username: 'princess_chae',
+      username: '',
+      name: '',
+      bio: '',
       avatarDataUrl: null,
       ipCode: '',
       mbti: '',
@@ -3843,12 +3843,22 @@
   async function syncProfileFromServer() {
     try {
       const res = await fetch('/api/me', { credentials: 'same-origin' });
+      if (res.status === 401) {
+        // 세션 만료 또는 계정 삭제됨 → 옛 캐시 지우고 로그인 화면으로
+        try {
+          localStorage.removeItem('princess_profile');
+          localStorage.removeItem('princessgram_state_v1');
+          localStorage.removeItem('persona_summary_last');
+        } catch (e) {}
+        window.location.href = '/login';
+        return;
+      }
       if (!res.ok) return;
       const json = await res.json();
       if (!json.ok || !json.user?.profile) return;
       const p = json.user.profile;
       myProfile = {
-        username: p.username || 'princess_chae',
+        username: p.username || '',
         name: p.princessName || '',
         bio: p.bio || '',
         avatarDataUrl: p.avatarUrl || null,
@@ -3859,6 +3869,7 @@
       };
       try { localStorage.setItem('princess_profile', JSON.stringify(myProfile)); } catch (e) {}
       try { renderMyProfile && renderMyProfile(); } catch (e) {}
+      try { renderProfileView && renderProfileView(); } catch (e) {}
       try { fillProfileForm && fillProfileForm(); } catch (e) {}
     } catch (e) { console.warn('[profile] sync failed', e); }
   }
@@ -3867,8 +3878,10 @@
   }
 
   async function saveProfile() {
-    const username = document.getElementById('profileUsername').value.trim() || 'princess_chae';
+    const username = document.getElementById('profileUsername').value.trim();
     myProfile.username = username;
+    const nameEl = document.getElementById('profileName');
+    myProfile.name = nameEl ? nameEl.value.trim() : (myProfile.name || '');
     myProfile.bio = document.getElementById('profileBio')?.value.trim() || '';
     myProfile.mbti = document.getElementById('profileMbti').value;
     myProfile.birthDate = document.getElementById('profileBirthDate').value;
@@ -3885,6 +3898,7 @@
         credentials: 'same-origin',
         body: JSON.stringify({
           username: myProfile.username || undefined,
+          princessName: myProfile.name || undefined,
           bio: myProfile.bio ?? undefined,
           mbti: myProfile.mbti || undefined,
           birthDate: myProfile.birthDate || undefined,
@@ -3935,7 +3949,8 @@
   }
 
   function fillProfileForm() {
-    document.getElementById('profileUsername').value = myProfile.username;
+    document.getElementById('profileUsername').value = myProfile.username || '';
+    const nameEl = document.getElementById('profileName'); if (nameEl) nameEl.value = myProfile.name || '';
     const bioEl = document.getElementById('profileBio'); if (bioEl) bioEl.value = myProfile.bio || '';
     document.getElementById('profileMbti').value = myProfile.mbti || '';
     document.getElementById('profileBirthDate').value = myProfile.birthDate || '';
