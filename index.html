@@ -1555,6 +1555,11 @@
     return map[idx];
   }
 
+  // 현재 사용자가 AI 프롬프트에서 불릴 이름 (실제 이름 > 아이디 > '친구')
+  function meName() {
+    return (typeof myProfile !== 'undefined' && myProfile && (myProfile.name || myProfile.username)) || '친구';
+  }
+
   function buildUserContext(profile) {
     if (!profile) return '';
     const lines = [];
@@ -1577,7 +1582,7 @@
   }
 
   function buildSystemPrompt(char, userCtx, isNegative) {
-    let sys = char.systemPrompt + (userCtx || '');
+    let sys = char.systemPrompt.replace(/princess_chae/g, meName()) + (userCtx || '');
     if (char.id === 'ruby_' && userCtx && /MBTI /.test(userCtx)) {
       sys += `\n[ruby_ 특수 지시] 너 ruby_는 이번 댓글에서 사용자의 MBTI와 동일한 성격을 가진 사람처럼 반응해. 사용자가 ENFP면 들뜨고 즉흥적으로, INTP면 분석적이고 한 발 떨어진 톤으로. MBTI 알파벳을 직접 언급하지 말 것.`;
     }
@@ -1591,7 +1596,7 @@
     const sys = buildSystemPrompt(char, userCtx, isNegative);
     let out = await aiChat({
       system: sys,
-      user: `친구 princess_chae가 방금 올린 일기야:\n"""\n${postText}\n"""\n위 일기에 댓글을 달아줘. 댓글 본문만 출력.`,
+      user: `친구 ${meName()}가 방금 올린 일기야:\n"""\n${postText}\n"""\n위 일기에 댓글을 달아줘. 댓글 본문만 출력.`,
       temperature: 0.95, maxTokens: 80
     });
     if (!out) return null;
@@ -1859,10 +1864,10 @@
   async function generateCommentReply(char, postText, userReply) {
     if (!getApiKey() || !char.systemPrompt) return null;
     const tone = char.replyProfile?.tone || '';
-    const sys = char.systemPrompt + `\n[추가 지시 — 답글 모드]\n친구 princess_chae가 너의 댓글에 직접 답글을 달았어. 너는 그 답글에 다시 짧게 반응해. 톤: ${tone}\n- 한 줄, 최대 50자\n- 따옴표 금지, 일기 내용 직접 인용 금지\n- 답글에 자연스럽게 반응 (놀라움/장난/공감/시크함 등 캐릭터 성격대로)`;
+    const sys = char.systemPrompt.replace(/princess_chae/g, meName()) + `\n[추가 지시 — 답글 모드]\n친구 ${meName()}가 너의 댓글에 직접 답글을 달았어. 너는 그 답글에 다시 짧게 반응해. 톤: ${tone}\n- 한 줄, 최대 50자\n- 따옴표 금지, 일기 내용 직접 인용 금지\n- 답글에 자연스럽게 반응 (놀라움/장난/공감/시크함 등 캐릭터 성격대로)`;
     let out = await aiChat({
       system: sys,
-      user: `원래 일기: "${postText}"\n네가 단 댓글에 princess_chae가 답한 답글: "${userReply}"\n위 답글에 다시 반응하는 답글을 써. 본문만.`,
+      user: `원래 일기: "${postText}"\n네가 단 댓글에 ${meName()}가 답한 답글: "${userReply}"\n위 답글에 다시 반응하는 답글을 써. 본문만.`,
       temperature: 0.95, maxTokens: 60
     });
     if (!out) return null;
@@ -1874,10 +1879,10 @@
   async function generateDMOpener(char, ctx) {
     if (!getApiKey() || !char.systemPrompt) return null;
     const tone = char.replyProfile?.tone || '';
-    const sys = char.systemPrompt + `\n[추가 지시 — DM 모드]\n너는 지금 친구 princess_chae에게 개인 메시지(DM)를 먼저 보내. 댓글창에서 못 한 말, 또는 은근히 마음 쓰이는 부분을 따로 전하는 상황. 톤: ${tone}\n- 1~2개 짧은 메시지 (각 한 줄, 최대 50자)\n- 줄바꿈으로 구분\n- "아까 그 댓글", "답글 보고", "DM으로" 같은 자연스러운 도입 사용 가능\n- 따옴표 금지, 일기 인용 금지`;
+    const sys = char.systemPrompt.replace(/princess_chae/g, meName()) + `\n[추가 지시 — DM 모드]\n너는 지금 친구 ${meName()}에게 개인 메시지(DM)를 먼저 보내. 댓글창에서 못 한 말, 또는 은근히 마음 쓰이는 부분을 따로 전하는 상황. 톤: ${tone}\n- 1~2개 짧은 메시지 (각 한 줄, 최대 50자)\n- 줄바꿈으로 구분\n- "아까 그 댓글", "답글 보고", "DM으로" 같은 자연스러운 도입 사용 가능\n- 따옴표 금지, 일기 인용 금지`;
     const raw = await aiChat({
       system: sys,
-      user: `원래 일기: "${ctx.postText}"\nprincess_chae가 단 답글: "${ctx.userReply}"\n이 상황에서 너가 먼저 DM을 보내. 본문만.`,
+      user: `원래 일기: "${ctx.postText}"\n${meName()}가 단 답글: "${ctx.userReply}"\n이 상황에서 너가 먼저 DM을 보내. 본문만.`,
       temperature: 0.95, maxTokens: 100
     });
     if (!raw) return null;
@@ -2212,8 +2217,8 @@
       let reply = null;
       if (getApiKey() && char.systemPrompt) {
         const tone = char.replyProfile?.tone || '';
-        const history = thread.messages.slice(-6).map(m => `${m.from === 'me' ? 'princess_chae' : char.id}: ${m.text}`).join('\n');
-        const sys = char.systemPrompt + `\n[추가 지시 — DM 대화]\n친구와 1:1 DM을 주고받는 상황. 톤: ${tone}\n- 한 줄, 최대 50자\n- 따옴표 금지, 자연스러운 친구 톤`;
+        const history = thread.messages.slice(-6).map(m => `${m.from === 'me' ? meName() : char.id}: ${m.text}`).join('\n');
+        const sys = char.systemPrompt.replace(/princess_chae/g, meName()) + `\n[추가 지시 — DM 대화]\n친구와 1:1 DM을 주고받는 상황. 톤: ${tone}\n- 한 줄, 최대 50자\n- 따옴표 금지, 자연스러운 친구 톤`;
         const out = await aiChat({
           system: sys,
           user: `최근 대화:\n${history}\n\n위 흐름에 이어 너의 다음 답장을 써. 본문만.`,
@@ -2865,10 +2870,10 @@
         let reply = null;
         if (getApiKey() && char.systemPrompt) {
           const tone = char.replyProfile?.tone || '';
-          const sys = char.systemPrompt + `\n[추가 지시 — 자기 게시글 댓글 답글 모드]\n친구 princess_chae가 너의 게시글에 댓글을 달았어. 너는 게시글 작성자로서 짧게 반응해. 톤: ${tone}\n- 한 줄, 최대 50자\n- 본문만, 따옴표 금지`;
+          const sys = char.systemPrompt.replace(/princess_chae/g, meName()) + `\n[추가 지시 — 자기 게시글 댓글 답글 모드]\n친구 ${meName()}가 너의 게시글에 댓글을 달았어. 너는 게시글 작성자로서 짧게 반응해. 톤: ${tone}\n- 한 줄, 최대 50자\n- 본문만, 따옴표 금지`;
           const out = await aiChat({
             system: sys,
-            user: `너의 게시글: "${post?.caption || ''}"\nprincess_chae 댓글: "${text}"\n위 댓글에 답글을 써. 본문만.`,
+            user: `너의 게시글: "${post?.caption || ''}"\n${meName()} 댓글: "${text}"\n위 댓글에 답글을 써. 본문만.`,
             temperature: 0.95, maxTokens: 60
           });
           if (out) {
